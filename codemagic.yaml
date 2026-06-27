@@ -21,7 +21,9 @@ workflows:
       - name: Install Flutter Dependencies & Pods
         script: |
           flutter packages pub get
-          cd ios && pod install --repo-update
+          flutter precache --ios
+          flutter build ios --config-only
+          if [ -d "ios" ] && [ -f "ios/Podfile" ]; then cd ios && pod install --repo-update; fi
       - name: Build iOS IPA (Ad-Hoc)
         script: |
           if flutter build ipa --export-method ad-hoc --build-number $BUILD_NUMBER; then
