@@ -1,0 +1,33 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Register new device and update Ad-Hoc provisioning profile"
+  lane :register_tester do |options|
+    device_name = options[:name] || "Chrpa"
+    device_udid = options[:udid] || "00008101-0019343622F9001E"
+    
+    register_devices(
+      devices: {
+        device_name => device_udid
+      }
+    )
+    
+    # Regenerate Ad-Hoc provisioning profile to include new device
+    get_provisioning_profile(
+      adhoc: true,
+      force: true,
+      app_identifier: "com.pkgames.partwk"
+    )
+  end
+
+  desc "Build Ad-Hoc IPA package and compile wireless manifest.plist"
+  lane :build_adhoc do
+    build_app(
+      workspace: "Runner.xcworkspace",
+      scheme: "Runner",
+      export_method: "ad-hoc",
+      output_directory: "./build_output",
+      output_name: "Partwk_AdHoc.ipa"
+    )
+  end
+end

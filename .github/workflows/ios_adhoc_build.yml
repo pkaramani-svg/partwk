@@ -1,0 +1,58 @@
+name: Partwk iOS Ad-Hoc Cloud Build & OTA Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build & Sign iOS Ad-Hoc IPA
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Apple Certificate & Provisioning Profile
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
+          echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > $RUNNER_TEMP/build_certificate.p12
+          echo "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode > $RUNNER_TEMP/profile.mobileprovision
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import p12 certificate
+          security import $RUNNER_TEMP/build_certificate.p12 -k $KEYCHAIN_PATH -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Copy mobileprovision
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $RUNNER_TEMP/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: Build Ad-Hoc IPA
+        run: flutter build ipa --export-method ad-hoc --build-number ${{ github.run_number }}
+
+      - name: Upload IPA & Manifest Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Partwk_AdHoc_IPA
+          path: |
+            build/ios/ipa/*.ipa
+            ios/fastlane/manifest.plist

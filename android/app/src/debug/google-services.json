@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "545483273382",
+    "project_id": "partwk-bd4ec",
+    "storage_bucket": "partwk-bd4ec.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:545483273382:android:99e8f444d37c0dfcbb3067",
+        "android_client_info": {
+          "package_name": "com.pkgames.partwk"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "545483273382-t3j2baps3q3gdkjs5ja5al9lbnisli15.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pkgames.partwk",
+            "certificate_hash": "74aea3cb50a10413839e22b17045e6f1bf831eba"
+          }
+        },
+        {
+          "client_id": "545483273382-smgus3pgg9sir2t8ealkc4m2v0s6squs.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmUjUw-ZZmBEU9PppHw27xbItNk-tBZT0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "545483273382-smgus3pgg9sir2t8ealkc4m2v0s6squs.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

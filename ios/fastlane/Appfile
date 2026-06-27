@@ -1,0 +1,7 @@
+# Appfile for Partwk iOS Ad-Hoc Distribution
+app_identifier("com.pkgames.partwk") # The bundle identifier of your app
+# apple_id("your-apple-id@example.com") # Your Apple Developer Account email
+# team_id("YOUR_TEAM_ID") # Developer Portal Team ID
+
+# For more information about the Appfile, see:
+# https://docs.fastlane.tools/advanced/#appfile
