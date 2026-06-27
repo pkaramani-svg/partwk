@@ -31,20 +31,20 @@ workflows:
           else
             echo "Fallback to unsigned build"
             flutter build ios --release --no-codesign
-            mkdir -p build/ios/ipa
-            mkdir -p build/ios/Payload
-            if [ -d "build/ios/iphoneos/Runner.app" ]; then
-              cp -r build/ios/iphoneos/Runner.app build/ios/Payload/
-            elif [ -d "build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app" ]; then
-              cp -r build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app build/ios/Payload/
+            mkdir -p $CM_BUILD_DIR/build/ios/ipa
+            mkdir -p $CM_BUILD_DIR/build/ios/Payload
+            if [ -d "$CM_BUILD_DIR/build/ios/iphoneos/Runner.app" ]; then
+              cp -r $CM_BUILD_DIR/build/ios/iphoneos/Runner.app $CM_BUILD_DIR/build/ios/Payload/
+            elif [ -d "$CM_BUILD_DIR/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app" ]; then
+              cp -r $CM_BUILD_DIR/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app $CM_BUILD_DIR/build/ios/Payload/
             fi
-            cd build/ios
-            zip -r ipa/Partwk_App.ipa Payload
+            cd $CM_BUILD_DIR/build/ios
+            zip -r $CM_BUILD_DIR/build/ios/ipa/Partwk_App.ipa Payload
           fi
       - name: Generate Wireless Manifest & Package Artifacts
         script: |
           mkdir -p $CM_BUILD_DIR/ota_output
-          cp build/ios/ipa/*.ipa $CM_BUILD_DIR/ota_output/Partwk_AdHoc.ipa || true
+          cp $CM_BUILD_DIR/build/ios/ipa/*.ipa $CM_BUILD_DIR/ota_output/Partwk_AdHoc.ipa || true
           
           cat <<EOF > $CM_BUILD_DIR/ota_output/manifest.plist
           <?xml version="1.0" encoding="UTF-8"?>
