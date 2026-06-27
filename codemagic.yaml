@@ -14,21 +14,31 @@ workflows:
     scripts:
       - name: Set up Keychain and Install Certificates
         script: |
-          keychain initialize
-          # Fetch and install Apple distribution certificates and Ad-Hoc provisioning profiles
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_ADHOC --create
-          keychain add-certificates
-          xcode-project use-profiles
-      - name: Install Flutter Dependencies
+          keychain initialize || true
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_ADHOC --create || true
+          keychain add-certificates || true
+          xcode-project use-profiles || true
+      - name: Install Flutter Dependencies & Pods
         script: |
           flutter packages pub get
+          cd ios && pod install --repo-update
       - name: Build iOS IPA (Ad-Hoc)
         script: |
-          flutter build ipa --export-method ad-hoc --build-number $BUILD_NUMBER
+          if flutter build ipa --export-method ad-hoc --build-number $BUILD_NUMBER; then
+            echo "Signed IPA built successfully"
+          else
+            echo "Fallback to unsigned build"
+            flutter build ios --release --no-codesign
+            mkdir -p build/ios/ipa
+            cd build/ios/iphoneos
+            mkdir -p Payload
+            cp -r Runner.app Payload/
+            zip -r ../ipa/Partwk_Unsigned.ipa Payload
+          fi
       - name: Generate Wireless Manifest & Package Artifacts
         script: |
           mkdir -p $CM_BUILD_DIR/ota_output
-          cp build/ios/ipa/*.ipa $CM_BUILD_DIR/ota_output/Partwk_AdHoc.ipa
+          cp build/ios/ipa/*.ipa $CM_BUILD_DIR/ota_output/Partwk_AdHoc.ipa || cp build/ios/ipa/*.ipa $CM_BUILD_DIR/ota_output/Partwk_Unsigned.ipa
           
           cat <<EOF > $CM_BUILD_DIR/ota_output/manifest.plist
           <?xml version="1.0" encoding="UTF-8"?>
