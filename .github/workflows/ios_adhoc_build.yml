@@ -44,8 +44,10 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $RUNNER_TEMP/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
 
-      - name: Install Flutter Dependencies
-        run: flutter pub get
+      - name: Install Dependencies & Pods
+        run: |
+          flutter pub get
+          cd ios && pod install --repo-update
 
       - name: Build Ad-Hoc IPA
         run: |
