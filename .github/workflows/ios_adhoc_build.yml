@@ -48,12 +48,23 @@ jobs:
         run: flutter pub get
 
       - name: Build Ad-Hoc IPA
-        run: flutter build ipa --export-method ad-hoc --build-number ${{ github.run_number }}
+        run: |
+          if [ -n "${{ secrets.BUILD_CERTIFICATE_BASE64 }}" ]; then
+            flutter build ipa --export-method ad-hoc --build-number ${{ github.run_number }}
+          else
+            flutter build ios --release --no-codesign
+            mkdir -p build/ios/ipa
+            cd build/ios/iphoneos
+            mkdir -p Payload
+            cp -r Runner.app Payload/
+            zip -r ../ipa/Partwk_Unsigned.ipa Payload
+          fi
 
       - name: Upload IPA & Manifest Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Partwk_AdHoc_IPA
           path: |
             build/ios/ipa/*.ipa
+            build/ios/iphoneos/*.app
             ios/fastlane/manifest.plist
