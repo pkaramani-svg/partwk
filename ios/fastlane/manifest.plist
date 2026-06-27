@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>assets</key>
+			<array>
+				<dict>
+					<key>kind</key>
+					<key>software-package</key>
+					<key>url</key>
+					<string>https://partwk-bd4ec.web.app/downloads/adhoc/Partwk_AdHoc.ipa</string>
+				</dict>
+				<dict>
+					<key>kind</key>
+					<key>display-image</key>
+					<key>url</key>
+					<string>https://partwk-bd4ec.web.app/downloads/adhoc/57x57.png</string>
+				</dict>
+				<dict>
+					<key>kind</key>
+					<key>full-size-image</key>
+					<key>url</key>
+					<string>https://partwk-bd4ec.web.app/downloads/adhoc/512x512.png</string>
+				</dict>
+			</array>
+			<key>metadata</key>
+			<dict>
+				<key>bundle-identifier</key>
+				<string>com.pkgames.partwk</string>
+				<key>bundle-version</key>
+				<string>1.0.0</string>
+				<key>kind</key>
+				<string>software</string>
+				<key>platform-identifier</key>
+				<string>com.apple.platform.iphoneos</string>
+				<key>title</key>
+				<string>Partwk</string>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

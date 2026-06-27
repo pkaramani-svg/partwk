@@ -1,0 +1,69 @@
+name: partwk
+description: "Partwk - Premium Book Summaries, Audio & Micro-Learning App"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  provider: ^6.1.2
+  google_fonts: ^6.2.1
+  shared_preferences: ^2.2.3
+  percent_indicator: ^4.2.3
+  uuid: ^4.3.3
+  just_audio: ^0.9.36
+  firebase_core: ^3.1.0
+  firebase_auth: ^5.1.0
+  cloud_firestore: ^5.0.1
+  firebase_storage: ^12.0.0
+  flutter_dotenv: ^5.1.0
+  dart_openai: ^6.1.1
+  google_sign_in: ^6.2.1
+  sign_in_with_apple: ^8.1.0
+  crypto: ^3.0.7
+  firebase_messaging: ^15.2.10
+  flutter_local_notifications: ^17.0.0
+  path_provider: ^2.1.2
+  dio: ^5.4.0
+  flutter_animate: ^4.5.2
+  just_audio_background: ^0.0.1-beta.17
+  flutter_secure_storage: ^10.3.1
+  encrypt: ^5.0.3
+  url_launcher: ^6.3.2
+  app_links: ^6.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/app_icon.jpg"
+  remove_alpha_ios: true
+
+flutter_native_splash:
+  color: "#ffffff"
+  android: true
+  ios: true
+  android_12:
+    color: "#ffffff"
+
+flutter:
+  uses-material-design: true
+
+  # Add assets if needed (e.g. placeholders/icons)
+  assets:
+    - assets/images/
+    - assets/audio/
+    - .env

@@ -1,0 +1,68 @@
+workflows:
+  ios-adhoc-workflow:
+    name: Partwk iOS Ad-Hoc Build & Wireless OTA Upload
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - apple_credentials # Codemagic environment group for APPLE_DEVELOPMENT_TEAM, APP_STORE_CONNECT_KEY, etc.
+      vars:
+        BUNDLE_ID: "com.pkgames.partwk"
+    scripts:
+      - name: Set up Keychain and Install Certificates
+        script: |
+          keychain initialize
+          # Fetch and install Apple distribution certificates and Ad-Hoc provisioning profiles
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_ADHOC --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Install Flutter Dependencies
+        script: |
+          flutter packages pub get
+      - name: Build iOS IPA (Ad-Hoc)
+        script: |
+          flutter build ipa --export-method ad-hoc --build-number $BUILD_NUMBER
+      - name: Generate Wireless Manifest & Package Artifacts
+        script: |
+          mkdir -p $CM_BUILD_DIR/ota_output
+          cp build/ios/ipa/*.ipa $CM_BUILD_DIR/ota_output/Partwk_AdHoc.ipa
+          
+          cat <<EOF > $CM_BUILD_DIR/ota_output/manifest.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>items</key>
+            <array>
+              <dict>
+                <key>assets</key>
+                <array>
+                  <dict>
+                    <key>kind</key>
+                    <key>software-package</key>
+                    <key>url</key>
+                    <string>https://partwk-bd4ec.web.app/downloads/adhoc/Partwk_AdHoc.ipa</string>
+                  </dict>
+                </array>
+                <key>metadata</key>
+                <dict>
+                  <key>bundle-identifier</key>
+                  <string>com.pkgames.partwk</string>
+                  <key>bundle-version</key>
+                  <string>1.0.0</string>
+                  <key>kind</key>
+                  <string>software</string>
+                  <key>title</key>
+                  <string>Partwk</string>
+                </dict>
+              </dict>
+            </array>
+          </dict>
+          </plist>
+          EOF
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - $CM_BUILD_DIR/ota_output/*
