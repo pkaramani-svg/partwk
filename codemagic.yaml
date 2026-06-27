@@ -32,15 +32,19 @@ workflows:
             echo "Fallback to unsigned build"
             flutter build ios --release --no-codesign
             mkdir -p build/ios/ipa
-            cd build/ios/iphoneos
-            mkdir -p Payload
-            cp -r Runner.app Payload/
-            zip -r ../ipa/Partwk_Unsigned.ipa Payload
+            mkdir -p build/ios/Payload
+            if [ -d "build/ios/iphoneos/Runner.app" ]; then
+              cp -r build/ios/iphoneos/Runner.app build/ios/Payload/
+            elif [ -d "build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app" ]; then
+              cp -r build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app build/ios/Payload/
+            fi
+            cd build/ios
+            zip -r ipa/Partwk_App.ipa Payload
           fi
       - name: Generate Wireless Manifest & Package Artifacts
         script: |
           mkdir -p $CM_BUILD_DIR/ota_output
-          cp build/ios/ipa/*.ipa $CM_BUILD_DIR/ota_output/Partwk_AdHoc.ipa || cp build/ios/ipa/*.ipa $CM_BUILD_DIR/ota_output/Partwk_Unsigned.ipa
+          cp build/ios/ipa/*.ipa $CM_BUILD_DIR/ota_output/Partwk_AdHoc.ipa || true
           
           cat <<EOF > $CM_BUILD_DIR/ota_output/manifest.plist
           <?xml version="1.0" encoding="UTF-8"?>
