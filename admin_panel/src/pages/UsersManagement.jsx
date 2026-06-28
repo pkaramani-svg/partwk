@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Trash2, CheckCircle, XCircle, X, Edit2, Key, BarChart2, Plus, ArrowUp, ArrowDown } from 'lucide-react';
+import { Trash2, CheckCircle, XCircle, X, Edit2, Key, BarChart2, Plus, ArrowUp, ArrowDown, Lock } from 'lucide-react';
 import './UsersManagement.css';
-import { fetchUsers, subscribeToUsers, fetchBooks, updateUserStatus, sendPasswordResetEmail, createNewUserManually, deleteUser } from '../services/api';
+import { fetchUsers, subscribeToUsers, fetchBooks, updateUserStatus, sendPasswordResetEmail, createNewUserManually, deleteUser, updateUserPasswordDirectly } from '../services/api';
 
 const formatDateTimeLocal = (isoString) => {
   if (!isoString) return '';
@@ -46,8 +46,11 @@ const UsersManagement = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState(null);
+  const [newDirectPassword, setNewDirectPassword] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Form State for Edit
   const [editForm, setEditForm] = useState({ phone: '', address: '', role: 'user', subscriptionStatus: 'free', status: 'active', familyMembers: '' });
@@ -421,7 +424,10 @@ const UsersManagement = () => {
                     <button className="icon-btn-small" onClick={() => openEditModal(user)} title="Edit Details">
                       <Edit2 size={18} color="#3B82F6" />
                     </button>
-                    <button className="icon-btn-small" onClick={() => handlePasswordReset(user.email)} title="Send Password Reset">
+                    <button className="icon-btn-small" onClick={() => { setSelectedUser(user); setNewDirectPassword(''); setShowChangePasswordModal(true); }} title="Set New Password Directly">
+                      <Lock size={18} color="#8B5CF6" />
+                    </button>
+                    <button className="icon-btn-small" onClick={() => handlePasswordReset(user.email)} title="Send Password Reset Email">
                       <Key size={18} color="#F59E0B" />
                     </button>
                     <button className="icon-btn-small" onClick={() => handleDeleteUser(user)} title="Delete User">
@@ -661,6 +667,58 @@ const UsersManagement = () => {
               }
               return <p style={{ color: '#94A3B8', fontSize: '14px' }}>No active reading or listening in progress.</p>;
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showChangePasswordModal && selectedUser && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="modal-content glass-panel" style={{ width: '440px', padding: '32px', position: 'relative' }}>
+            <button onClick={() => setShowChangePasswordModal(false)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={24} /></button>
+            <h2 style={{ marginBottom: '12px', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Lock size={22} color="#8B5CF6" /> Set New Password
+            </h2>
+            <p style={{ color: '#94A3B8', fontSize: '13px', marginBottom: '20px' }}>
+              Directly update the login password for <strong>{selectedUser.name || selectedUser.email}</strong>.
+            </p>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!newDirectPassword || newDirectPassword.length < 6) {
+                alert("Password must be at least 6 characters long.");
+                return;
+              }
+              setIsUpdatingPassword(true);
+              try {
+                await updateUserPasswordDirectly(selectedUser.id, selectedUser.email, newDirectPassword);
+                alert(`Password updated successfully for ${selectedUser.email}!`);
+                setShowChangePasswordModal(false);
+              } catch (err) {
+                alert("Error updating password: " + err.message);
+              } finally {
+                setIsUpdatingPassword(false);
+              }
+            }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', color: '#CBD5E1', fontSize: '13px', fontWeight: '600' }}>New Password</label>
+                <input 
+                  type="password" 
+                  required 
+                  minLength={6} 
+                  placeholder="Enter new password (min 6 chars)" 
+                  className="input-field" 
+                  value={newDirectPassword} 
+                  onChange={e => setNewDirectPassword(e.target.value)} 
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} 
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '12px' }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowChangePasswordModal(false)}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={isUpdatingPassword}>
+                  {isUpdatingPassword ? "Updating..." : "Save New Password"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

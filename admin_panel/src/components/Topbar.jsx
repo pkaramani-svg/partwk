@@ -90,11 +90,12 @@ const Topbar = ({ searchTerm, setSearchTerm }) => {
                 <Settings size={16} /> Account Settings
               </button>
               <button 
-                onClick={async () => { 
-                  setShowProfile(false); 
+                onClick={async () => {
+                  sessionStorage.removeItem('admin_2fa_verified');
+                  sessionStorage.removeItem('admin_email');
                   const { getAuth, signOut } = await import('firebase/auth');
                   await signOut(getAuth());
-                  window.location.reload();
+                  navigate('/login');
                 }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: 'transparent', border: 'none', color: '#EF4444', textAlign: 'left', cursor: 'pointer', borderRadius: '6px' }}
                 onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
