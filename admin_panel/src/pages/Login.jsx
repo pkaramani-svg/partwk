@@ -74,7 +74,7 @@ const Login = () => {
 
     // Enforce pkaramani@gmail.com as sole admin
     if (cleanEmail !== 'pkaramani@gmail.com') {
-      setError("Access denied. Only pkaramani@gmail.com is authorized as system administrator.");
+      setError("Access denied. Invalid administrator credentials.");
       setLoading(false);
       return;
     }
@@ -90,7 +90,7 @@ const Login = () => {
       }
     } catch (authErr) {
       console.error("Auth error:", authErr);
-      setError("Invalid admin password. Access denied.");
+      setError("Access denied. Invalid administrator credentials.");
     } finally {
       setLoading(false);
     }
