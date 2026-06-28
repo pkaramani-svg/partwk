@@ -1,12 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, QrCode } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import './Login.css';
 
-// Lightweight pure JS TOTP calculation algorithm for Google Authenticator
+// Pure JS TOTP calculation algorithm for Google Authenticator
 async function verifyTOTP(token, secret = 'PARTWKADMINSECRET2FA') {
-  if (token === '123456') return true; // Master emergency backup code
+  // Emergency backup codes check
+  if (token === '123456' || token === '998877') return true;
   try {
     const base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     let bits = '';
@@ -20,7 +21,6 @@ async function verifyTOTP(token, secret = 'PARTWKADMINSECRET2FA') {
     }
 
     const currentEpoch = Math.floor(Date.now() / 1000 / 30);
-    // Test current time window, previous window, and next window for drift tolerance
     for (let timeOffset = -1; timeOffset <= 1; timeOffset++) {
       const epoch = currentEpoch + timeOffset;
       const timeBuffer = new ArrayBuffer(8);
@@ -55,14 +55,15 @@ const Login = () => {
   const [step, setStep] = useState(1); // 1: Credentials, 2: Google Authenticator 2FA
   
   // Step 1 State
-  const [email, setEmail] = useState('pkaramani@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
-  // Step 2 State (6-digit OTP)
+  // Step 2 State (6-digit OTP & Emergency Backup)
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [useEmergencyCode, setUseEmergencyCode] = useState(false);
+  const [emergencyInput, setEmergencyInput] = useState('');
   const inputRefs = useRef([]);
 
   const handleStep1Submit = async (e) => {
@@ -81,7 +82,6 @@ const Login = () => {
 
     try {
       const auth = getAuth();
-      // Strictly authenticate via Firebase Auth password check
       const userCred = await signInWithEmailAndPassword(auth, cleanEmail, password);
       if (userCred.user) {
         setStep(2);
@@ -103,7 +103,6 @@ const Login = () => {
     newOtp[index] = value.substring(value.length - 1);
     setOtp(newOtp);
 
-    // Auto-focus next input
     if (value && index < 5 && inputRefs.current[index + 1]) {
       inputRefs.current[index + 1].focus();
     }
@@ -118,16 +117,26 @@ const Login = () => {
   const handleStep2Submit = async (e) => {
     e.preventDefault();
     setError('');
-    const enteredCode = otp.join('');
     
-    if (enteredCode.length < 6) {
-      setError("Please enter the complete 6-digit code from Google Authenticator.");
-      return;
+    let isValid = false;
+    if (useEmergencyCode) {
+      const cleanEmergency = emergencyInput.trim();
+      if (cleanEmergency === 'PARTWK-EMERGENCY-2FA' || cleanEmergency === '998877' || cleanEmergency === '123456') {
+        isValid = true;
+      } else {
+        setError("Invalid emergency backup key.");
+        return;
+      }
+    } else {
+      const enteredCode = otp.join('');
+      if (enteredCode.length < 6) {
+        setError("Please enter the complete 6-digit code from Google Authenticator.");
+        return;
+      }
+      setLoading(true);
+      isValid = await verifyTOTP(enteredCode, 'PARTWKADMINSECRET2FA');
+      setLoading(false);
     }
-
-    setLoading(true);
-    const isValid = await verifyTOTP(enteredCode, 'PARTWKADMINSECRET2FA');
-    setLoading(false);
 
     if (isValid) {
       sessionStorage.setItem('admin_2fa_verified', 'true');
@@ -177,6 +186,7 @@ const Login = () => {
                 <Mail className="input-icon" size={18} />
                 <input 
                   type="email" 
+                  placeholder="admin@partwk.com" 
                   value={email} 
                   onChange={(e) => setEmail(e.target.value)} 
                   required 
@@ -204,52 +214,54 @@ const Login = () => {
           </form>
         ) : (
           <form onSubmit={handleStep2Submit}>
-            <div className="form-group">
-              <label style={{ textAlign: 'center', marginBottom: '16px' }}>
-                Enter 6-Digit Code from Google Authenticator App
-              </label>
-              <div className="otp-container">
-                {otp.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(el) => (inputRefs.current[index] = el)}
-                    type="text"
-                    className="otp-input"
-                    maxLength="1"
-                    value={digit}
-                    onChange={(e) => handleOtpChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                  />
-                ))}
+            {!useEmergencyCode ? (
+              <div className="form-group">
+                <label style={{ textAlign: 'center', marginBottom: '16px' }}>
+                  Enter 6-Digit Code from Google Authenticator App
+                </label>
+                <div className="otp-container">
+                  {otp.map((digit, index) => (
+                    <input
+                      key={index}
+                      ref={(el) => (inputRefs.current[index] = el)}
+                      type="text"
+                      className="otp-input"
+                      maxLength="1"
+                      value={digit}
+                      onChange={(e) => handleOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(index, e)}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="form-group">
+                <label style={{ marginBottom: '8px', color: '#F59E0B' }}>Emergency Backup Key</label>
+                <div className="input-with-icon">
+                  <KeyRound className="input-icon" size={18} color="#F59E0B" />
+                  <input 
+                    type="password" 
+                    placeholder="Enter emergency backup key" 
+                    value={emergencyInput} 
+                    onChange={(e) => setEmergencyInput(e.target.value)} 
+                    required 
+                  />
+                </div>
+              </div>
+            )}
 
             <button type="submit" className="btn-submit-step" disabled={loading}>
               {loading ? "Verifying 2FA..." : <>Verify & Access Dashboard <ShieldCheck size={18} /></>}
             </button>
 
-            {/* Google Authenticator Setup Collapsible Card */}
             <div style={{ marginTop: '20px', textAlign: 'center' }}>
               <button 
                 type="button" 
-                onClick={() => setShowSetupGuide(!showSetupGuide)}
-                style={{ background: 'transparent', border: 'none', color: '#8B5CF6', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: '500' }}
+                onClick={() => { setUseEmergencyCode(!useEmergencyCode); setError(''); }}
+                style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: '12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               >
-                <QrCode size={14} /> {showSetupGuide ? "Hide Google Authenticator Key" : "Set up Google Authenticator Key"}
+                <KeyRound size={13} /> {useEmergencyCode ? "Use Google Authenticator App Code" : "Lost access to app? Use Emergency Backup Code"}
               </button>
-
-              {showSetupGuide && (
-                <div style={{ marginTop: '12px', background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '12px', padding: '14px', fontSize: '12px', color: '#CBD5E1', textAlign: 'left' }}>
-                  <p style={{ margin: '0 0 8px 0', fontWeight: 'bold', color: '#FFF' }}>How to connect Google Authenticator:</p>
-                  <ol style={{ margin: '0 0 10px 0', paddingLeft: '20px', lineHeight: '1.6' }}>
-                    <li>Open Google Authenticator app on your phone.</li>
-                    <li>Tap <strong>+</strong> &rarr; <strong>Enter a setup key</strong>.</li>
-                    <li>Account name: <code>Partwk Admin</code></li>
-                    <li>Key: <strong style={{ color: '#F59E0B', letterSpacing: '1px' }}>PARTWKADMINSECRET2FA</strong></li>
-                  </ol>
-                  <p style={{ margin: 0, fontSize: '11px', color: '#94A3B8' }}>* Enter the 6-digit code generated by your app into the boxes above.</p>
-                </div>
-              )}
             </div>
           </form>
         )}
