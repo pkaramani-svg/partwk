@@ -1,11 +1,16 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import './Layout.css';
 
 const Layout = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const isVerified = sessionStorage.getItem('admin_2fa_verified') === 'true';
+
+  if (!isVerified) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <div className="app-layout">

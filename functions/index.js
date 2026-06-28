@@ -286,3 +286,28 @@ exports.checkPremiumExpirations = onSchedule('every day 00:00', async (event) =>
     }
   }
 });
+
+exports.adminUpdateUserPassword = onCall(async (request) => {
+  const { uid, email, newPassword } = request.data || {};
+  if ((!uid && !email) || !newPassword) {
+    throw new HttpsError('invalid-argument', 'Must provide (uid or email) and newPassword.');
+  }
+
+  try {
+    let targetUid = uid;
+    if (!targetUid && email) {
+      const userRecord = await admin.auth().getUserByEmail(email.trim().toLowerCase());
+      targetUid = userRecord.uid;
+    }
+    await admin.auth().updateUser(targetUid, { password: newPassword });
+    await admin.firestore().collection('users').doc(targetUid).set({
+      passwordUpdatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    return { success: true, message: "User password updated successfully in Firebase Auth." };
+  } catch (error) {
+    console.error("Error updating user password:", error);
+    throw new HttpsError('internal', error.message || 'Unable to update password.', error);
+  }
+});
+

@@ -132,6 +132,31 @@ export const sendPasswordResetEmail = async (email) => {
   }
 };
 
+export const updateUserPasswordDirectly = async (userId, userEmail, newPassword) => {
+  try {
+    const response = await fetch('https://us-central1-partwk-bd4ec.cloudfunctions.net/adminUpdateUserPassword', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: { uid: userId, email: userEmail, newPassword: newPassword }
+      })
+    });
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(errJson.error?.message || 'Cloud function update failed');
+    }
+  } catch (e) {
+    console.warn("Cloud function fallback: Storing password update request in Firestore user record:", e);
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      pendingAdminPassword: newPassword,
+      passwordUpdatedAt: new Date().toISOString()
+    });
+  }
+};
+
 export const createNewUserManually = async (userData) => {
   // Use a secondary app instance so we don't sign out the current admin user
   const secondaryApp = initializeApp(firebaseConfig, `SecondaryApp_${Date.now()}`);
