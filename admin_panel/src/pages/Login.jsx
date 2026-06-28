@@ -1,13 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, KeyRound, Hash } from 'lucide-react';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import './Login.css';
 
 // Pure JS TOTP calculation algorithm for Google Authenticator
 async function verifyTOTP(token, secret = 'PARTWKADMINSECRET2FA') {
-  // Emergency backup codes check
-  if (token === '984271') return true;
   try {
     const base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     let bits = '';
@@ -60,10 +58,11 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Step 2 State (6-digit OTP & Emergency Backup)
+  // Step 2 State (6-digit OTP & Dual Emergency Backup)
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [useEmergencyCode, setUseEmergencyCode] = useState(false);
-  const [emergencyInput, setEmergencyInput] = useState('');
+  const [emergencyKey, setEmergencyKey] = useState('');
+  const [emergencyPin, setEmergencyPin] = useState('');
   const inputRefs = useRef([]);
 
   const handleStep1Submit = async (e) => {
@@ -120,11 +119,14 @@ const Login = () => {
     
     let isValid = false;
     if (useEmergencyCode) {
-      const cleanEmergency = emergencyInput.trim();
-      if (cleanEmergency === 'PK-ADMIN-SECURE-984271-EMERGENCY-KEY' || cleanEmergency === '984271') {
+      const cleanKey = emergencyKey.trim();
+      const cleanPin = emergencyPin.trim();
+      
+      // Require BOTH Emergency Key AND Emergency PIN to be correct simultaneously
+      if (cleanKey === 'PK-ADMIN-SECURE-984271-EMERGENCY-KEY' && cleanPin === '984271') {
         isValid = true;
       } else {
-        setError("Invalid emergency backup key.");
+        setError("Invalid emergency security credentials. Both Key and PIN must be correct.");
         return;
       }
     } else {
@@ -235,17 +237,33 @@ const Login = () => {
                 </div>
               </div>
             ) : (
-              <div className="form-group">
-                <label style={{ marginBottom: '8px', color: '#F59E0B' }}>Emergency Backup Key</label>
-                <div className="input-with-icon">
-                  <KeyRound className="input-icon" size={18} color="#F59E0B" />
-                  <input 
-                    type="password" 
-                    placeholder="Enter emergency backup key" 
-                    value={emergencyInput} 
-                    onChange={(e) => setEmergencyInput(e.target.value)} 
-                    required 
-                  />
+              <div>
+                <div className="form-group">
+                  <label style={{ marginBottom: '8px', color: '#F59E0B' }}>Part 1: Emergency Backup Key</label>
+                  <div className="input-with-icon">
+                    <KeyRound className="input-icon" size={18} color="#F59E0B" />
+                    <input 
+                      type="password" 
+                      placeholder="Enter emergency key (Part 1)" 
+                      value={emergencyKey} 
+                      onChange={(e) => setEmergencyKey(e.target.value)} 
+                      required 
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ marginBottom: '8px', color: '#F59E0B' }}>Part 2: Emergency Backup PIN</label>
+                  <div className="input-with-icon">
+                    <Hash className="input-icon" size={18} color="#F59E0B" />
+                    <input 
+                      type="password" 
+                      placeholder="Enter emergency PIN (Part 2)" 
+                      value={emergencyPin} 
+                      onChange={(e) => setEmergencyPin(e.target.value)} 
+                      required 
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -260,7 +278,7 @@ const Login = () => {
                 onClick={() => { setUseEmergencyCode(!useEmergencyCode); setError(''); }}
                 style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: '12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               >
-                <KeyRound size={13} /> {useEmergencyCode ? "Use Google Authenticator App Code" : "Lost access to app? Use Emergency Backup Code"}
+                <KeyRound size={13} /> {useEmergencyCode ? "Use Google Authenticator App Code" : "Lost access to app? Use Emergency Backup Credentials"}
               </button>
             </div>
           </form>
