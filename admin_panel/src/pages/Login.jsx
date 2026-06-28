@@ -7,7 +7,7 @@ import './Login.css';
 // Pure JS TOTP calculation algorithm for Google Authenticator
 async function verifyTOTP(token, secret = 'PARTWKADMINSECRET2FA') {
   // Emergency backup codes check
-  if (token === '123456' || token === '998877') return true;
+  if (token === '984271') return true;
   try {
     const base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     let bits = '';
@@ -121,7 +121,7 @@ const Login = () => {
     let isValid = false;
     if (useEmergencyCode) {
       const cleanEmergency = emergencyInput.trim();
-      if (cleanEmergency === 'PARTWK-EMERGENCY-2FA' || cleanEmergency === '998877' || cleanEmergency === '123456') {
+      if (cleanEmergency === 'PK-ADMIN-SECURE-984271-EMERGENCY-KEY' || cleanEmergency === '984271') {
         isValid = true;
       } else {
         setError("Invalid emergency backup key.");
