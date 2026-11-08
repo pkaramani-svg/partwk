@@ -138,7 +138,7 @@ FINDING SUMMARY MATRIX:
 - **Category:** Secrets Management / Exposure
 - **Affected Component:** `.env`, `pubspec.yaml`, `functions/index.js`, `admin_panel/.env`
 - **Description:**  
-  1. Plaintext SMTP username and password for `info@partwk.com` were hardcoded in [functions/index.js:L17-L19](file:///Users/peshrawkaramani/Desktop/Partwk/functions/index.js#L17-L19) (`pass: "[REDACTED_HISTORICAL_CREDENTIAL]"` [REDACTED]).
+  1. Plaintext SMTP credentials for `info@partwk.com` were hardcoded in [functions/index.js:L17-L19](file:///Users/peshrawkaramani/Desktop/Partwk/functions/index.js#L17-L19). A historical SMTP credential was found and rotated.
   2. Multiple Google Gemini keys (`AQ.Ab8RN6...`) used in the backend generation pipeline were stored in `.env`.
   3. Legacy API keys for unused third-party services—OpenAI (`sk-proj-...`) and KurdishTTS (`71fd57ef...`)—were also present in `.env`.
   4. Crucially, [pubspec.yaml:L70](file:///Users/peshrawkaramani/Desktop/Partwk/pubspec.yaml#L70) historically included `.env` under the Flutter application `assets:` bundle. Any release APK or IPA built with this configuration would contain the `.env` file in plaintext within the asset directory.

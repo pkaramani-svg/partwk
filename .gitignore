@@ -58,4 +58,21 @@ admin_panel/.env
 scratch/
 temp_pipeline_audio/
 temp_pipeline_covers/
+output_audio/
 .tool/
+
+# Firebase & Deployment Cache
+.firebase/
+
+# Local Secrets & Credentials
+*.secret
+*.pem
+*.key
+*service-account*.json
+serviceAccountKey*.json
+firebase-adminsdk*.json
+
+# Temporary Audit, Test & Bundle Artifacts
+functions/test_email.js
+test_results/
+*.bundle
