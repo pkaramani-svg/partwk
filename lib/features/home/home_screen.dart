@@ -1,19 +1,25 @@
 import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/services/service_locator.dart';
-import '../../core/widgets/book_card.dart';
 import '../../models/book.dart';
-import '../../models/user.dart';
 import '../../models/category.dart';
 import '../book/book_details_screen.dart';
+import '../book/summary_reader_screen.dart';
+import '../audio/audio_player_screen.dart';
 import '../profile/paywall_screen.dart';
 import '../profile/achievements_screen.dart';
 import '../../core/constants/daily_quotes.dart';
 import '../../services/download_service.dart';
 import '../../core/services/network_guard.dart';
+import '../../core/services/popup_service.dart';
+import 'main_navigation.dart';
+import '../profile/settings_screen.dart';
+import '../notifications/notifications_screen.dart';
+import '../../core/services/user_notification_service.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -25,6 +31,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<Book> _allBooks = [];
   List<Book> _filteredSuggestions = [];
+  List<Category> _categories = [];
+  List<Map<String, String>> _allQuotes = [];
+  List<Book> _trendingBooks = [];
   String _selectedMood = 'Ambitious';
   bool _isLoading = true;
 
@@ -37,13 +46,30 @@ class _HomeScreenState extends State<HomeScreen> {
   void _loadData() async {
     final books = await AppLocator.db.fetchBooks();
     final categories = await AppLocator.db.fetchCategories();
+    final trending = await AppLocator.db.fetchTrendingBooks(books);
+    
+    List<Map<String, String>> localQuotes = [];
+    try {
+      final quotesJsonString = await DefaultAssetBundle.of(context)
+          .loadString('assets/audio/quotes.json')
+          .timeout(const Duration(milliseconds: 100));
+      final List<dynamic> decoded = jsonDecode(quotesJsonString);
+      localQuotes = decoded.map((e) => Map<String, String>.from(e.map((k, v) => MapEntry(k.toString(), v.toString())))).toList();
+    } catch (e) {
+      debugPrint('Error loading quotes: $e');
+    }
+
     if (mounted) {
       setState(() {
         _allBooks = books;
         _filteredSuggestions = books; // Default shows all
+        _categories = categories;
+        _allQuotes = localQuotes;
+        _trendingBooks = trending;
         _isLoading = false;
       });
       _checkForNewBooks(books, categories);
+      PopupService.checkAndShowPopups(context);
     }
   }
 
@@ -87,53 +113,80 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     
     final prefs = await SharedPreferences.getInstance();
-    final List<String>? seenBookIds = prefs.getStringList('seen_book_ids');
+    final List<String>? seenEditions = prefs.getStringList('seen_book_editions');
+    final List<String>? legacySeenBookIds = prefs.getStringList('seen_book_ids');
     
-    // First-launch guard
-    if (seenBookIds == null) {
-      final allIds = books.map((b) => b.id).toList();
-      await prefs.setStringList('seen_book_ids', allIds);
+    const supportedLangs = ['en', 'ku', 'ar'];
+
+    // 1. First-Launch / Safe Migration Guard:
+    // If seen_book_editions has not been initialized yet:
+    if (seenEditions == null) {
+      final Set<String> initialEditions = {};
+      
+      // Seed all visible, published editions across all current books
+      for (final b in books) {
+        if (!b.isPublished) continue;
+        for (final lang in supportedLangs) {
+          if (b.hasContentForLanguage(lang)) {
+            initialEditions.add('${b.id}_$lang');
+          }
+        }
+      }
+      
+      await prefs.setStringList('seen_book_editions', initialEditions.toList());
+      
+      // Preserve/initialize legacy list as well
+      if (legacySeenBookIds == null) {
+        await prefs.setStringList('seen_book_ids', books.map((b) => b.id).toList());
+      }
       return;
     }
     
-    // Find unseen books
-    final unseenBooks = books.where((b) => !seenBookIds.contains(b.id)).toList();
-    if (unseenBooks.isEmpty) return;
-    
-    // Update local list of seen books so we don't pop up again
-    final updatedIds = List<String>.from(seenBookIds);
-    for (final b in unseenBooks) {
-      updatedIds.add(b.id);
-    }
-    await prefs.setStringList('seen_book_ids', updatedIds);
-    
-    // Get the user's active language code
+    // 2. Identify the active language of the user
     if (!mounted) return;
     final localizations = AppLocalizations.of(context);
     final langCode = localizations?.locale.languageCode ?? 'en';
     
-    // Find eligible books for the popup
-    final eligibleBooks = unseenBooks.where((book) {
-      final hasEn = book.hasContentForLanguage('en');
-      final hasKu = book.hasContentForLanguage('ku');
-      final hasAr = book.hasContentForLanguage('ar');
-      final availableInAll3 = hasEn && hasKu && hasAr;
+    // 3. Find books with unseen editions for the user's current language
+    final List<Book> eligibleBooks = [];
+    final List<String> newlySeenEditions = [];
+    
+    for (final book in books) {
+      if (!book.isPublished) continue;
       
-      if (availableInAll3) return true;
-      return book.hasContentForLanguage(langCode);
-    }).toList();
+      // Must have visible, non-hidden content for the user's active language
+      if (!book.hasContentForLanguage(langCode)) continue;
+      
+      final editionKey = '${book.id}_$langCode';
+      if (!seenEditions.contains(editionKey)) {
+        eligibleBooks.add(book);
+        newlySeenEditions.add(editionKey);
+      }
+    }
     
     if (eligibleBooks.isEmpty) return;
     
-    // Show the first eligible book popup after the frame renders
+    // 4. Update seen book editions so we don't pop up again
+    final updatedEditions = List<String>.from(seenEditions)..addAll(newlySeenEditions);
+    await prefs.setStringList('seen_book_editions', updatedEditions);
+    
+    if (legacySeenBookIds != null) {
+      final updatedLegacyIds = Set<String>.from(legacySeenBookIds)
+        ..addAll(eligibleBooks.map((b) => b.id));
+      await prefs.setStringList('seen_book_ids', updatedLegacyIds.toList());
+    }
+    
+    // 5. Show the eligible books popup queue after the frame renders
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _showNewBookDialog(eligibleBooks.first, categories, langCode);
+        _showNewBookDialogsQueue(eligibleBooks, categories, langCode);
       }
     });
   }
 
-  void _showNewBookDialog(Book book, List<Category> categories, String langCode) {
+  void _showNewBookDialogsQueue(List<Book> remainingBooks, List<Category> categories, String langCode) {
+    if (remainingBooks.isEmpty) return;
+    final book = remainingBooks.first;
     final theme = Theme.of(context);
     
     // Find Category
@@ -182,10 +235,10 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    showDialog(
+    showDialog<bool>(
       context: context,
       barrierDismissible: true,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return Dialog(
           backgroundColor: theme.scaffoldBackgroundColor,
           shape: RoundedRectangleBorder(
@@ -322,11 +375,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(color: Colors.grey.shade700),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(12),
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: () => Navigator.of(dialogContext).pop(false),
                             child: Text(
                               _getDialogText('close', langCode),
                               textAlign: TextAlign.center,
@@ -350,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               elevation: 0,
                             ),
                             onPressed: () {
-                              Navigator.of(context).pop();
+                              Navigator.of(dialogContext).pop(true);
                               NetworkGuard.guardBookNavigation(context, book.id, () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
@@ -377,14 +430,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: IconButton(
                   icon: const Icon(Icons.close, size: 20),
                   color: Colors.grey,
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
                 ),
               ),
             ],
           ),
         );
       },
-    );
+    ).then((userClickedAction) {
+      if (userClickedAction != true) {
+        final nextQueue = remainingBooks.sublist(1);
+        if (nextQueue.isNotEmpty && mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showNewBookDialogsQueue(nextQueue, categories, langCode);
+          });
+        }
+      }
+    });
   }
 
   void _selectMood(String moodKey) {
@@ -423,27 +485,153 @@ class _HomeScreenState extends State<HomeScreen> {
     final validBooks = _allBooks.where((b) => b.hasContentForLanguage(langCode)).toList();
     final validSuggestions = _filteredSuggestions.where((b) => b.hasContentForLanguage(langCode)).toList();
 
+    // Segmentations for HomeScreen lists
+    // 1. New Releases: 21 days (3 weeks) worth of books, falling back to 40 most recent books in system
+    final List<Book> uniqueNewReleases = () {
+      final threeWeeksAgo = DateTime.now().subtract(const Duration(days: 21));
+      var releasesList = validBooks.where((b) => b.createdAt.isAfter(threeWeeksAgo)).toList();
+      releasesList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (releasesList.isEmpty) {
+        releasesList = List<Book>.from(validBooks)
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      }
+      return releasesList.take(40).toList();
+    }();
+
+    // 2. Trending: Dynmically computed trending books based on real user actions
+    final uniqueTrending = _trendingBooks.take(40).toList();
+
+    // 3. Recommended: personalized based on user interaction categories and interests
+    final List<Book> uniqueRecommended = () {
+      final userReadBookIds = <String>{};
+      if (user != null) {
+        userReadBookIds.addAll(user.savedBooks);
+        userReadBookIds.addAll(user.completedBooks);
+        userReadBookIds.addAll(user.likedBooks);
+        userReadBookIds.addAll(user.readingProgress.keys);
+      }
+
+      final userCategories = <String>{};
+      for (final bookId in userReadBookIds) {
+        final b = validBooks.firstWhere((book) => book.id == bookId, orElse: () => validBooks.first);
+        if (b.id == bookId) {
+          userCategories.addAll(b.categoryIds);
+        }
+      }
+
+      final candidateBooks = validBooks.where((b) {
+        final matchesCategory = b.categoryIds.any((catId) => userCategories.contains(catId));
+        final notYetRead = !userReadBookIds.contains(b.id);
+        return matchesCategory && notYetRead;
+      }).toList();
+
+      if (candidateBooks.length < 20 && user != null && user.interests.isNotEmpty) {
+        final interestCandidates = validBooks.where((b) =>
+            b.categoryIds.any((catId) => user.interests.contains(catId)) &&
+            !userReadBookIds.contains(b.id) &&
+            !candidateBooks.contains(b)
+        ).toList();
+        candidateBooks.addAll(interestCandidates);
+      }
+
+      if (candidateBooks.length < 20) {
+        final generalCandidates = validBooks.where((b) =>
+            !userReadBookIds.contains(b.id) && !candidateBooks.contains(b)
+        ).toList();
+        candidateBooks.addAll(generalCandidates);
+      }
+
+      if (candidateBooks.isEmpty) {
+        candidateBooks.addAll(validBooks);
+      }
+
+      final daysSinceEpoch = DateTime.now().difference(DateTime(2024, 1, 1)).inDays;
+      final math.Random r = math.Random(daysSinceEpoch + 200);
+      final listCopy = List<Book>.from(candidateBooks);
+      listCopy.shuffle(r);
+      return listCopy.toSet().toList().take(20).toList();
+    }();
+
+    final bool isUserPremium = user != null && user.isPremium && !AppLocator.auth.isGuest;
+    final List<Book> basePool = isUserPremium
+        ? validBooks
+        : validBooks.where((b) => !b.isPremium && b.isPublished && !b.hiddenLanguages.contains(langCode)).toList();
+
+    final Book? featuredSpecialBook = () {
+      if (basePool.isEmpty) {
+        return validBooks.isNotEmpty ? validBooks.firstWhere((b) => !b.isPremium && b.isPublished && !b.hiddenLanguages.contains(langCode), orElse: () => validBooks.first) : null;
+      }
+
+      // Collect user's read/liked/saved book IDs to analyze preferences
+      final userReadBookIds = <String>{};
+      if (user != null) {
+        userReadBookIds.addAll(user.savedBooks);
+        userReadBookIds.addAll(user.completedBooks);
+        userReadBookIds.addAll(user.likedBooks);
+        userReadBookIds.addAll(user.readingProgress.keys);
+      }
+
+      // 1. Identify categories from books the user has interacted with
+      final userCategories = <String>{};
+      for (final bookId in userReadBookIds) {
+        final b = basePool.firstWhere((book) => book.id == bookId, orElse: () => basePool.first);
+        if (b.id == bookId) {
+          userCategories.addAll(b.categoryIds);
+        }
+      }
+
+      // 2. Filter candidate books from matching categories that the user hasn't completed/read yet
+      final candidateBooks = basePool.where((b) {
+        final matchesCategory = b.categoryIds.any((catId) => userCategories.contains(catId));
+        final notYetRead = !userReadBookIds.contains(b.id);
+        return matchesCategory && notYetRead;
+      }).toList();
+
+      // 3. Fallback candidates to user's interests if candidate list is empty
+      if (candidateBooks.isEmpty && user != null && user.interests.isNotEmpty) {
+        candidateBooks.addAll(
+          basePool.where((b) => b.categoryIds.any((catId) => user.interests.contains(catId)) && !userReadBookIds.contains(b.id))
+        );
+      }
+
+      // 4. Default fallback: pick a popular book they haven't read yet
+      if (candidateBooks.isEmpty) {
+        candidateBooks.addAll(
+          basePool.where((b) => !userReadBookIds.contains(b.id))
+        );
+      }
+
+      // 5. If everything has been read or list is empty, default to basePool
+      if (candidateBooks.isEmpty) {
+        candidateBooks.addAll(basePool);
+      }
+
+      // 6. Seeded random selection that changes daily to keep the dashboard fresh
+      final daysSinceEpoch = DateTime.now().difference(DateTime(2024, 1, 1)).inDays;
+      final seedIndex = daysSinceEpoch % candidateBooks.length;
+      return candidateBooks[seedIndex];
+    }();
+
     // Seeded random book for Daily Digest that changes daily
     final daysSinceEpoch = DateTime.now().difference(DateTime(2024, 1, 1)).inDays;
     final Book? dailyDigestBook = () {
       if (validBooks.isEmpty) return null;
-      final user = AppLocator.auth.currentUser;
-      final isPremium = user != null && user.isPremium;
-      if (!isPremium) {
-        return validBooks.firstWhere(
-          (b) => b.id == 'atomic-habits',
-          orElse: () => validBooks.firstWhere(
-            (b) => !b.isPremium,
-            orElse: () => validBooks.first,
-          ),
-        );
+      if (!isUserPremium) {
+        final freeBooks = validBooks.where((b) => !b.isPremium && b.isPublished && !b.hiddenLanguages.contains(langCode)).toList();
+        if (freeBooks.isNotEmpty) {
+          final seed = daysSinceEpoch % freeBooks.length;
+          return freeBooks[seed];
+        }
+        return validBooks.first;
       }
       final random = math.Random(daysSinceEpoch);
       return validBooks[random.nextInt(validBooks.length)];
     }();
 
-    // Dynamically build the unlimited quotes list from the database
-    final List<Map<String, String>> dbQuotes = [];
+    // Dynamically build the combined quotes list from assets and database
+    final List<Map<String, String>> combinedQuotes = [];
+    combinedQuotes.addAll(_allQuotes);
+
     for (var book in _allBooks) {
       final quotesEn = book.getKeyQuotes('en');
       final quotesKu = book.getKeyQuotes('ku');
@@ -451,7 +639,7 @@ class _HomeScreenState extends State<HomeScreen> {
       
       final maxLen = [quotesEn.length, quotesKu.length, quotesAr.length].reduce(math.max);
       for (int i = 0; i < maxLen; i++) {
-        dbQuotes.add({
+        combinedQuotes.add({
           'en': i < quotesEn.length ? quotesEn[i] : (quotesEn.isNotEmpty ? quotesEn.first : ''),
           'ku': i < quotesKu.length ? quotesKu[i] : (quotesKu.isNotEmpty ? quotesKu.first : ''),
           'ar': i < quotesAr.length ? quotesAr[i] : (quotesAr.isNotEmpty ? quotesAr.first : ''),
@@ -460,39 +648,65 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
+    // Shuffle the combined quotes list deterministically with a fixed seed (e.g. 1001)
+    // so it doesn't change on rebuild, but cycles through all without repeats!
+    if (combinedQuotes.isNotEmpty) {
+      final math.Random r = math.Random(1001);
+      combinedQuotes.shuffle(r);
+    }
+
     Map<String, String> activeQuote;
-    if (dbQuotes.isNotEmpty) {
-      activeQuote = dbQuotes[daysSinceEpoch % dbQuotes.length];
+    if (combinedQuotes.isNotEmpty) {
+      activeQuote = combinedQuotes[daysSinceEpoch % combinedQuotes.length];
     } else {
       activeQuote = DailyQuotes.getTodaysQuote();
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: theme.colorScheme.secondary,
-              child: Text(
-                user?.name.isNotEmpty == true ? user!.name[0] : 'U',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: AnimatedBuilder(
+          animation: AppLocator.auth,
+          builder: (context, _) {
+            final user = AppLocator.auth.currentUser;
+            return GestureDetector(
+              onTap: () {
+                NavigationController.selectTab(3);
+              },
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: theme.colorScheme.secondary,
+                    backgroundImage: user?.profilePictureUrl != null && user!.profilePictureUrl!.isNotEmpty
+                        ? (user.profilePictureUrl!.startsWith('assets/')
+                            ? AssetImage(user.profilePictureUrl!) as ImageProvider
+                            : NetworkImage(user.profilePictureUrl!))
+                        : null,
+                    child: user?.profilePictureUrl == null || user!.profilePictureUrl!.isEmpty
+                        ? Text(
+                            user?.name.isNotEmpty == true ? user!.name[0] : 'U',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${localizations.translate('home')}',
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        user?.name ?? 'Guest Reader',
+                        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${localizations.translate('home')}',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  user?.name ?? 'Guest Reader',
-                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
-                ),
-              ],
-            ),
-          ],
+            );
+          },
         ),
         actions: [
           // Quick premium upgrade if free
@@ -521,13 +735,15 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: localizations.translate('settings'),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(localizations.translate('notifications_enabled'))),
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
               );
             },
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: SingleChildScrollView(
@@ -638,7 +854,46 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 24),
             ],
 
-            // 2. Mood Suggestions Section ("How are you feeling today?")
+            // 2. New Releases Section
+            if (uniqueNewReleases.isNotEmpty) ...[
+              Text(
+                localizations.translate('new_releases'),
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildHorizontalBookList(context, uniqueNewReleases, langCode, theme),
+              const SizedBox(height: 24),
+            ],
+
+            // 3. Recommended For You Section
+            if (uniqueRecommended.isNotEmpty) ...[
+              Text(
+                localizations.translate('recommended_for_you'),
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildHorizontalBookList(context, uniqueRecommended, langCode, theme),
+              const SizedBox(height: 24),
+            ],
+
+            // 4. Special Featured Book Section
+            if (featuredSpecialBook != null) ...[
+              _buildSpecialFeaturedBook(context, featuredSpecialBook, _categories, langCode, localizations, theme),
+              const SizedBox(height: 24),
+            ],
+
+            // 4. Trending Summaries Section
+            if (uniqueTrending.isNotEmpty) ...[
+              Text(
+                localizations.translate('trending'),
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildHorizontalBookList(context, uniqueTrending, langCode, theme),
+              const SizedBox(height: 24),
+            ],
+
+            // 5. Mood Suggestions Section ("How are you feeling today?")
             Text(
               localizations.translate('mood_suggestions'),
               style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -820,6 +1075,335 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildHorizontalBookList(
+    BuildContext context,
+    List<Book> books,
+    String langCode,
+    ThemeData theme,
+  ) {
+    return SizedBox(
+      height: 240,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: books.length,
+        itemBuilder: (context, index) {
+          final book = books[index];
+          return GestureDetector(
+            onTap: () {
+              NetworkGuard.guardBookNavigation(context, book.id, () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => BookDetailsScreen(bookId: book.id),
+                  ),
+                );
+              });
+            },
+            child: Container(
+              width: 120,
+              margin: const EdgeInsetsDirectional.only(end: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: DownloadService.getBookCoverWidget(
+                        book,
+                        langCode: langCode,
+                        height: 175,
+                        width: 120,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    book.getTitle(langCode),
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    book.getAuthor(langCode),
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSpecialFeaturedBook(
+    BuildContext context,
+    Book book,
+    List<Category> categories,
+    String langCode,
+    AppLocalizations localizations,
+    ThemeData theme,
+  ) {
+    final category = categories.firstWhere(
+      (c) => book.categoryIds.contains(c.id),
+      orElse: () => Category(id: '', name: {'en': ''}, iconName: 'book'),
+    );
+    final categoryName = category.getName(langCode);
+
+    final coverUrl = book.getCoverImageUrl(langCode);
+    final globalAudioUrl = book.getAudioUrl(langCode);
+    final chapters = book.getChapterSummaries(langCode);
+
+    final heading = langCode == 'ku'
+        ? 'پێشنیاری تایبەتی خوێنەران'
+        : (langCode == 'ar' ? 'ترشيح القراء المميز' : 'Featured Reader Pick');
+
+    final readText = langCode == 'ku' ? 'خوێندنەوە' : (langCode == 'ar' ? 'قراءة' : 'Read');
+    final listenText = langCode == 'ku' ? 'گوێگرتن' : (langCode == 'ar' ? 'استماع' : 'Listen');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          heading,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                colors: [
+                  theme.cardTheme.color ?? theme.colorScheme.surface,
+                  (theme.cardTheme.color ?? theme.colorScheme.surface).withOpacity(0.9),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: DownloadService.getBookCoverWidget(
+                          book,
+                          langCode: langCode,
+                          height: 160,
+                          width: 110,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (categoryName.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                categoryName,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          Text(
+                            book.getTitle(langCode),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            book.getAuthor(langCode),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey.shade400,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            book.getDescription(langCode),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.grey.shade400,
+                              height: 1.3,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: theme.colorScheme.secondary),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () {
+                          NetworkGuard.guardBookNavigation(context, book.id, () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => SummaryReaderScreen(bookId: book.id),
+                              ),
+                            );
+                          });
+                        },
+                        child: Text(
+                          readText,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.secondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.secondary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          elevation: 2,
+                        ),
+                        onPressed: () {
+                          NetworkGuard.guardBookNavigation(context, book.id, () {
+                            final audioService = AppLocator.audio;
+                            final isCurrentBook = audioService.currentBookId == book.id && audioService.currentLangCode == langCode;
+
+                            int initialIndex = 0;
+                            int startPos = 0;
+
+                            if (isCurrentBook) {
+                              initialIndex = audioService.currentChapterIndex;
+                              startPos = audioService.position.inSeconds;
+                              if (!audioService.isPlaying) {
+                                audioService.resume();
+                              }
+                            } else {
+                              var progress = AppLocator.auth.currentUser?.listeningProgress['${book.id}_$langCode'];
+                              if (progress == null) {
+                                final prefix = '${book.id}_';
+                                final matchingKey = AppLocator.auth.currentUser?.listeningProgress.keys.firstWhere(
+                                  (k) => k.startsWith(prefix),
+                                  orElse: () => '',
+                                ) ?? '';
+                                if (matchingKey.isNotEmpty) {
+                                  progress = AppLocator.auth.currentUser?.listeningProgress[matchingKey];
+                                }
+                              }
+                              if (progress != null) {
+                                initialIndex = progress['chapterIndex'] ?? 0;
+                                startPos = progress['positionSeconds'] ?? 0;
+                              }
+
+                              audioService.play(
+                                book.id,
+                                langCode,
+                                book.getTitle(langCode),
+                                coverUrl,
+                                globalAudioUrl,
+                                chapters,
+                                startIndex: initialIndex,
+                                startPosition: startPos,
+                                bookDurationSecs: book.getDurationForLanguage(langCode),
+                                isPremium: book.isPremium,
+                              );
+                            }
+
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => AudioPlayerScreen(
+                                  bookId: book.id,
+                                  langCode: langCode,
+                                  bookTitle: book.getTitle(langCode),
+                                  coverUrl: coverUrl,
+                                  globalAudioUrl: globalAudioUrl,
+                                  chapters: chapters,
+                                  initialChapterIndex: initialIndex,
+                                  initialPositionSecs: startPos,
+                                  bookDurationSecs: book.getDurationForLanguage(langCode),
+                                  isPremium: book.isPremium,
+                                ),
+                              ),
+                            );
+                          });
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.play_arrow, size: 18),
+                            const SizedBox(width: 4),
+                            Text(
+                              listenText,
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

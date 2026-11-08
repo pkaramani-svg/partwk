@@ -21,8 +21,15 @@ class EncryptedContentStorage {
     return result;
   }
 
-  static Future<List<int>> getOrCreateKey(String userId, String bookId) async {
-    final keyName = 'enc_key_${userId}_$bookId';
+  static String getKeyAlias(String userId, String bookId, [String? languageCode]) {
+    if (languageCode != null && languageCode.isNotEmpty) {
+      return 'enc_key_${userId}_${bookId}_$languageCode';
+    }
+    return 'enc_key_${userId}_$bookId';
+  }
+
+  static Future<List<int>> getOrCreateKey(String userId, String bookId, {String? languageCode}) async {
+    final keyName = getKeyAlias(userId, bookId, languageCode);
     String? keyHex = await _secureStorage.read(key: keyName);
     if (keyHex == null) {
       final random = Random.secure();
@@ -33,9 +40,26 @@ class EncryptedContentStorage {
     return _fromHex(keyHex);
   }
 
-  static Future<void> deleteDecryptionKey(String userId, String bookId) async {
-    final keyName = 'enc_key_${userId}_$bookId';
-    await _secureStorage.delete(key: keyName);
+  static Future<void> deleteDecryptionKey(String userId, String bookId, {String? languageCode}) async {
+    if (languageCode != null && languageCode.isNotEmpty) {
+      final keyName = getKeyAlias(userId, bookId, languageCode);
+      await _secureStorage.delete(key: keyName);
+      return;
+    }
+    // Also delete base un-scoped key if present
+    final baseKey = 'enc_key_${userId}_$bookId';
+    await _secureStorage.delete(key: baseKey);
+
+    // If languageCode is not specified, clean up all language-scoped keys for this book as well
+    try {
+      final allEntries = await _secureStorage.readAll();
+      final prefix = 'enc_key_${userId}_${bookId}_';
+      for (final k in allEntries.keys) {
+        if (k.startsWith(prefix)) {
+          await _secureStorage.delete(key: k);
+        }
+      }
+    } catch (_) {}
   }
 
   static Future<void> clearAllKeys() async {
@@ -43,8 +67,9 @@ class EncryptedContentStorage {
   }
 
   static Future<void> saveEncryptedFile(
-      String userId, String bookId, String filePath, List<int> plaintextBytes) async {
-    final keyBytes = await getOrCreateKey(userId, bookId);
+      String userId, String bookId, String filePath, List<int> plaintextBytes,
+      {String? languageCode}) async {
+    final keyBytes = await getOrCreateKey(userId, bookId, languageCode: languageCode);
     
     // Generate random 16 bytes IV
     final random = Random.secure();
@@ -72,7 +97,8 @@ class EncryptedContentStorage {
   }
 
   static Future<List<int>> readDecryptedFile(
-      String userId, String bookId, String filePath) async {
+      String userId, String bookId, String filePath,
+      {String? languageCode}) async {
     final file = File(filePath);
     if (!await file.exists()) {
       throw FileNotFoundException('File not found: $filePath');
@@ -85,8 +111,21 @@ class EncryptedContentStorage {
     
     final ivBytes = fileBytes.sublist(0, 16);
     final encryptedPayload = fileBytes.sublist(16);
+
+    // If languageCode not specified, infer from file path if possible
+    String? resolvedLang = languageCode;
+    if (resolvedLang == null || resolvedLang.isEmpty) {
+      final segments = filePath.split(Platform.pathSeparator);
+      final bookIndex = segments.indexOf(bookId);
+      if (bookIndex != -1 && bookIndex + 1 < segments.length) {
+        final nextSeg = segments[bookIndex + 1];
+        if (!nextSeg.contains('.')) {
+          resolvedLang = nextSeg;
+        }
+      }
+    }
     
-    final keyBytes = await getOrCreateKey(userId, bookId);
+    final keyBytes = await getOrCreateKey(userId, bookId, languageCode: resolvedLang);
     
     final decryptedBytes = await Isolate.run(() {
       final key = enc.Key(Uint8List.fromList(keyBytes));

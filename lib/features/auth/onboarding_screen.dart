@@ -76,9 +76,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   if (data['icon'] == 'schedule') slideIcon = Icons.schedule;
                   if (data['icon'] == 'psychology') slideIcon = Icons.psychology;
 
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Column(
+                  return LayoutBuilder(builder: (context, constraints) => SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         // Giant circle icon
@@ -89,11 +92,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             color: theme.colorScheme.secondary.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(32),
                           ),
-                          child: Icon(
-                            slideIcon,
-                            size: 80,
-                            color: theme.colorScheme.secondary,
-                          ),
+                          child: index == 0
+                              ? Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Image.asset('assets/images/partwk_emblem.png', fit: BoxFit.contain),
+                                )
+                              : Icon(
+                                  slideIcon,
+                                  size: 80,
+                                  color: theme.colorScheme.secondary,
+                                ),
                         ),
                         const SizedBox(height: 48),
                         Text(
@@ -114,8 +122,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           textAlign: TextAlign.center,
                         ),
                       ],
+                        ),
+                      ),
                     ),
-                  );
+                  ));
                 },
               ),
             ),

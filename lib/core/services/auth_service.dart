@@ -29,6 +29,7 @@ abstract class AuthService extends ChangeNotifier {
   UserModel? get currentUser;
   bool get isAuthenticated;
   bool get isGuest;
+  String get signInProvider;
   Future<void> initialize();
   Future<void> signInWithEmailAndPassword(String email, String password);
   Future<void> registerWithEmailAndPassword(String name, String email, String password);
@@ -49,16 +50,23 @@ abstract class AuthService extends ChangeNotifier {
   Future<void> removeCompletedBook(String bookId);
   Future<void> linkFamilyMember(String email);
   Future<void> upgradeToPremium();
-  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false});
+  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false, String? expectedUserId});
   Future<void> recordActivity();
   Future<void> addLearningTime(int seconds);
   Future<void> updatePresence({required String screen, String? bookTitle, String? bookId, String? activityType});
   Future<void> setOnlineStatus(bool isOnline);
+  Future<void> updateProfilePicture(String url);
+  Future<void> deleteAccount({String? password});
 }
 
 class MockAuthService extends AuthService {
   UserModel? _currentUser;
   bool _isGuest = false;
+  String mockProvider = 'password';
+  bool deleteAccountCalled = false;
+  String? lastDeletePassword;
+  bool shouldCancelReauth = false;
+  bool shouldFailReauth = false;
 
   @override
   UserModel? get currentUser => _currentUser;
@@ -69,8 +77,17 @@ class MockAuthService extends AuthService {
   @override
   bool get isGuest => _isGuest;
 
+  @override
+  String get signInProvider => mockProvider;
+
   MockAuthService() {
     // Start with null (needs onboarding/login)
+  }
+
+  void setUserForTesting(UserModel? user) {
+    _currentUser = user;
+    _isGuest = false;
+    notifyListeners();
   }
 
   @override
@@ -128,9 +145,23 @@ class MockAuthService extends AuthService {
     notifyListeners();
   }
 
+  String? lastResetEmail;
+  bool shouldFailResetPassword = false;
+  String resetPasswordFailureType = '';
+
   @override
   Future<void> resetPassword(String email) async {
-    await Future.delayed(const Duration(seconds: 1));
+    lastResetEmail = email;
+    if (shouldFailResetPassword) {
+      if (resetPasswordFailureType == 'rate-limit') {
+        throw Exception('too-many-requests');
+      } else if (resetPasswordFailureType == 'network') {
+        throw Exception('network-unavailable');
+      } else {
+        throw Exception('generic-error');
+      }
+    }
+    await Future.delayed(const Duration(milliseconds: 100));
   }
 
   @override
@@ -216,6 +247,37 @@ class MockAuthService extends AuthService {
   }
 
   @override
+  Future<void> deleteAccount({String? password}) async {
+    lastDeletePassword = password;
+    if (mockProvider == 'password') {
+      if (password == null || password.isEmpty) {
+        throw Exception('wrong-password: Password is required for re-authentication.');
+      }
+      if (shouldFailReauth) {
+        throw Exception('wrong-password: Re-authentication failed');
+      }
+    } else if (mockProvider == 'google.com') {
+      if (shouldCancelReauth) {
+        throw Exception('canceled: Re-authentication was canceled.');
+      }
+      if (shouldFailReauth) {
+        throw Exception('user-mismatch: Google re-authentication failed');
+      }
+    } else if (mockProvider == 'apple.com') {
+      if (shouldCancelReauth) {
+        throw Exception('canceled: Apple Sign In was canceled.');
+      }
+      if (shouldFailReauth) {
+        throw Exception('invalid-credential: Apple re-authentication failed');
+      }
+    }
+    deleteAccountCalled = true;
+    _currentUser = null;
+    _isGuest = false;
+    notifyListeners();
+  }
+
+  @override
   Future<void> updateSelectedLanguage(String langCode) async {
     if (_currentUser != null) {
       _currentUser = _currentUser!.copyWith(selectedLanguage: langCode);
@@ -235,6 +297,13 @@ class MockAuthService extends AuthService {
   Future<void> updateGoals(List<String> goals) async {
     if (_currentUser != null) {
       _currentUser = _currentUser!.copyWith(learningGoals: goals);
+      notifyListeners();
+    }
+  }
+  @override
+  Future<void> updateProfilePicture(String url) async {
+    if (_currentUser != null) {
+      _currentUser = _currentUser!.copyWith(profilePictureUrl: url);
       notifyListeners();
     }
   }
@@ -356,7 +425,7 @@ class MockAuthService extends AuthService {
   }
 
   @override
-  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false}) async {}
+  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false, String? expectedUserId}) async {}
 
   @override
   Future<void> addLearningTime(int seconds) async {}

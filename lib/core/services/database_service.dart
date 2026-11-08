@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/book.dart';
@@ -35,6 +36,8 @@ abstract class DatabaseService extends ChangeNotifier {
   Future<void> addBook(Book book);
   Future<void> addQuiz(Quiz quiz);
   Future<void> updateTranslations(String key, String enVal, String kuVal, String arVal);
+  Future<String?> getDefinition(String word, String langCode);
+  Future<List<Book>> fetchTrendingBooks(List<Book> allBooks);
 }
 
 class MockDatabaseService extends DatabaseService {
@@ -73,7 +76,6 @@ class MockDatabaseService extends DatabaseService {
       Category(id: 'cat-money-investing', name: {'en': 'Money & Investing', 'ku': 'پارە و وەبەرهێنان', 'ar': 'المال والاستثمار'}, iconName: 'attach_money'),
       Category(id: 'cat-communication', name: {'en': 'Communication', 'ku': 'پەیوەندی', 'ar': 'التواصل'}, iconName: 'chat'),
       Category(id: 'cat-health-wellness', name: {'en': 'Health & Wellness', 'ku': 'تەندروستی و باشی', 'ar': 'الصحة والعافية'}, iconName: 'health_and_safety'),
-      Category(id: 'cat-entrepreneurship', name: {'en': 'Entrepreneurship', 'ku': 'کارسازی', 'ar': 'ريادة الأعمال'}, iconName: 'rocket_launch'),
       Category(id: 'cat-technology-innovation', name: {'en': 'Technology & Innovation', 'ku': 'تەکنەلۆژیا و داهێنان', 'ar': 'التكنولوجيا والابتكار'}, iconName: 'lightbulb'),
       Category(id: 'cat-biography-memoir', name: {'en': 'Biography & Memoir', 'ku': 'ژیاننامە و یادەوەری', 'ar': 'السيرة الذاتية والمذكرات'}, iconName: 'menu_book'),
       Category(id: 'cat-modern-wisdom', name: {'en': 'Modern Wisdom', 'ku': 'دانایی مۆدێرن', 'ar': 'الحكمة الحديثة'}, iconName: 'auto_awesome'),
@@ -541,7 +543,7 @@ class MockDatabaseService extends DatabaseService {
         questions: [
           QuizQuestion(
             questionText: langCode == 'en' ? 'What is the primary message of this summary?' :
-                          langCode == 'ku' ? 'پەیامی سەرەکی ئەم کورتەکراوەیە چییە؟' :
+                          langCode == 'ku' ? 'پەیامی سەرەکی ئەم کورتکراوەیە چییە؟' :
                           'ما هي الرسالة الأساسية لهذا الملخص؟',
             choices: langCode == 'en' ? ['Empowerment through knowledge', 'Passive relaxation', 'Rapid multitasking'] :
                      langCode == 'ku' ? ['بەهێزبوون لەڕێگەی زانیارییەوە', 'حەسانەوەی پاسیڤ', 'ئەنجامدانی چەند کارێک بە خێرایی'] :
@@ -611,5 +613,63 @@ class MockDatabaseService extends DatabaseService {
   Future<void> updateTranslations(String key, String enVal, String kuVal, String arVal) async {
     // Mimic translations dictionary updates
     notifyListeners();
+  }
+
+  @override
+  Future<String?> getDefinition(String word, String langCode) async {
+    final Map<String, Map<String, String>> mockDict = {
+      'focus': {
+        'en': 'The state or quality of having or producing clear visual definition; center of activity or interest.',
+        'ku': 'خاڵی سەرەکی یان هونەری کۆکردنەوەی هەموو سەرنج لەسەر یەک بابەت یان کارێکی تایبەت.',
+        'ar': 'حالة أو جودة الحصول على تحديد مرئي واضح؛ مركز النشاط أو الاهتمام.'
+      },
+      'productivity': {
+        'en': 'The state or quality of being productive; effectiveness of productive effort.',
+        'ku': 'ڕێژە یان توانای بەرهەمهێنانی کار بە شێوازێکی کاریگەر و بە سوود لە کەمترین کاتدا.',
+        'ar': 'حالة أو جودة الإنتاجية؛ فعالية الجهد الإنتاجي.'
+      },
+      'success': {
+        'en': 'The accomplishment of an aim or purpose.',
+        'ku': 'گەیشتن بە ئامانج یان سەرکەوتن لە ئەنجامدانی کارێکی دیاریکراودا.',
+        'ar': 'إنجاز هدف أو غاية.'
+      },
+      'habit': {
+        'en': 'A settled or regular tendency or practice, especially one that is hard to give up.',
+        'ku': 'خوو؛ نەریتێک یان ڕەفتارێک کە بە بەردەوامی دووبارە دەبێتەوە و وازهێنان لێی قورسە.',
+        'ar': 'نزعة أو ممارسة مستقرة أو منتظمة، خاصة تلك التي يصعب التخلي عنها.'
+      },
+      'mind': {
+        'en': 'The element of a person that enables them to be aware of the world and their experiences, to think, and to feel.',
+        'ku': 'مێشک؛ توانای مرۆڤ بۆ بیرکردنەوە، تێگەیشتن، هەستکردن و بڕیاردان.',
+        'ar': 'العنصر في الشخص الذي يمكنه من إدراك العالم وتجاربه والتفكير والشعور.'
+      },
+      'leader': {
+        'en': 'The person who leads or commands a group, organization, or country.',
+        'ku': 'سەرکردە؛ ئەو کەسەی کە ڕێبەری یان سەرکردایەتی کۆمەڵێک یان ڕێکخراوێک دەکات.',
+        'ar': 'الشخص الذي يقود أو يأمر مجموعة أو منظمة أو دولة.'
+      }
+    };
+
+    final sanitized = word.trim().toLowerCase();
+    return mockDict[sanitized]?[langCode] ?? mockDict[sanitized]?['en'];
+  }
+
+  @override
+  Future<List<Book>> fetchTrendingBooks(List<Book> allBooks) async {
+    final trendingCandidates = allBooks.where((b) =>
+      b.tags.contains('bestseller') ||
+      b.tags.contains('trending') ||
+      b.tags.contains('popular')
+    ).toList();
+    
+    if (trendingCandidates.isEmpty) {
+      trendingCandidates.addAll(allBooks);
+    }
+    
+    final daysSinceEpoch = DateTime.now().difference(DateTime(2024, 1, 1)).inDays;
+    final math.Random r = math.Random(daysSinceEpoch + 500);
+    final listCopy = List<Book>.from(trendingCandidates);
+    listCopy.shuffle(r);
+    return listCopy;
   }
 }

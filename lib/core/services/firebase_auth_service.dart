@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as dart_math;
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:crypto/crypto.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -31,6 +34,9 @@ class FirebaseAuthService extends AuthService {
     _firebaseAuth.authStateChanges().listen((user) async {
       if (user != null) {
         if (!user.isAnonymous) {
+          if (_currentUser != null && _currentUser!.id != user.uid) {
+            await AppLocator.audio.clearState();
+          }
           _isGuest = false;
           if (_isSigningIn) {
             return;
@@ -108,6 +114,8 @@ class FirebaseAuthService extends AuthService {
           }
         }
       }
+    }, onError: (e) {
+      print("User doc stream error: $e");
     });
   }
 
@@ -119,6 +127,17 @@ class FirebaseAuthService extends AuthService {
 
   @override
   bool get isGuest => _isGuest;
+
+  @override
+  String get signInProvider {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return 'none';
+    final providerIds = user.providerData.map((p) => p.providerId).toList();
+    if (providerIds.contains('google.com')) return 'google.com';
+    if (providerIds.contains('apple.com')) return 'apple.com';
+    if (providerIds.contains('password')) return 'password';
+    return providerIds.isNotEmpty ? providerIds.first : 'password';
+  }
 
   @override
   Future<void> initialize() async {
@@ -291,32 +310,24 @@ class FirebaseAuthService extends AuthService {
         _currentUser = mergedUser;
         _isGuest = false;
         
-        // 1. Check Family Premium Status
+        // 1. Read the backend-owned effective entitlement projection. This is
+        // the only family entitlement input; never query another user's profile
+        // or persist a client-computed family flag.
         try {
-          bool updatedHasFamilyPremium = false;
-          if (_currentUser!.email.isNotEmpty) {
-            final familyQuery = await _firestore.collection('users')
-                .where('familyMembers', arrayContains: _currentUser!.email.toLowerCase())
-                .limit(1)
-                .get();
-            if (familyQuery.docs.isNotEmpty) {
-              final ownerData = familyQuery.docs.first.data();
-              final ownerSub = ownerData['subscriptionStatus'] as String?;
-              final ownerRole = ownerData['role'] as String?;
-              
-              if (ownerSub == 'premium' || ownerSub == 'pro' || ownerRole == 'admin') {
-                updatedHasFamilyPremium = true;
-              }
-            }
-          }
-          if (_currentUser!.hasFamilyPremium != updatedHasFamilyPremium) {
-            _currentUser = _currentUser!.copyWith(hasFamilyPremium: updatedHasFamilyPremium);
-            await _firestore.collection('users').doc(uid).update({
-              'hasFamilyPremium': updatedHasFamilyPremium,
-            });
+          final entitlement = await _firestore.collection('entitlements').doc(uid).get();
+          if (entitlement.exists && entitlement.data() != null) {
+            final data = entitlement.data()!;
+            final expiresAt = data['expiresAt'];
+            final expiry = expiresAt is Timestamp ? expiresAt.toDate().toIso8601String() : null;
+            final active = data['status'] == 'active' && (expiry == null || DateTime.parse(expiry).isAfter(DateTime.now()));
+            _currentUser = _currentUser!.copyWith(
+              hasFamilyPremium: data['source'] == 'family' && active,
+              subscriptionStatus: data['source'] == 'family' ? 'free' : (active ? 'premium' : _currentUser!.subscriptionStatus),
+              subscriptionExpiryDate: expiry ?? _currentUser!.subscriptionExpiryDate,
+            );
           }
         } catch (e) {
-          print("Error checking family premium: $e");
+          print("Error reading backend entitlement: $e");
         }
 
         // Cache the fully populated user model locally
@@ -387,7 +398,7 @@ class FirebaseAuthService extends AuthService {
   }
 
   Future<void> _updateUserDocument(UserModel updatedUser) async {
-    if (_currentUser == null || _isGuest) return;
+    if (_currentUser?.id != updatedUser.id || _firebaseAuth.currentUser?.uid != updatedUser.id || _isGuest) return;
     _currentUser = updatedUser;
     notifyListeners();
     
@@ -395,7 +406,15 @@ class FirebaseAuthService extends AuthService {
     await OfflineAvailabilityRepository.cacheUser(updatedUser);
     
     try {
-      await _firestore.collection('users').doc(updatedUser.id).set(updatedUser.toMap(), SetOptions(merge: true));
+      // Entitlement and membership values in the model can be projections of
+      // backend-owned records. Never write them back with personal progress.
+      final profile = updatedUser.toMap()
+        ..remove('subscriptionStatus')
+        ..remove('subscriptionStartDate')
+        ..remove('subscriptionExpiryDate')
+        ..remove('hasFamilyPremium')
+        ..remove('familyMembers');
+      await _firestore.collection('users').doc(updatedUser.id).set(profile, SetOptions(merge: true));
     } catch (e) {
       debugPrint("Offline mode: User profile update queued in Firestore: $e");
     }
@@ -445,46 +464,31 @@ class FirebaseAuthService extends AuthService {
 
   @override
   Future<void> resetPassword(String email) async {
+    final cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail.isEmpty || !cleanEmail.contains('@')) {
+      throw const FormatException('invalid-email');
+    }
+
     try {
-      final querySnapshot = await _firestore
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      if (querySnapshot.docs.isEmpty) {
-        throw 'Email is not registered in our system.';
+      final fns = FirebaseFunctions.instance;
+      await fns.httpsCallable('sendCustomPasswordReset').call({'email': cleanEmail});
+    } catch (callableError) {
+      debugPrint('sendCustomPasswordReset callable error, falling back to standard Firebase Auth: $callableError');
+      try {
+        await _firebaseAuth.sendPasswordResetEmail(email: cleanEmail);
+      } on auth.FirebaseAuthException catch (e) {
+        if (e.code == 'user-not-found') {
+          // Generic success response to prevent account enumeration
+          return;
+        }
+        rethrow;
       }
-
-      final dio = Dio();
-      final response = await dio.post(
-        'https://us-central1-partwk-bd4ec.cloudfunctions.net/sendCustomPasswordReset',
-        data: {
-          'data': {
-            'email': email,
-          }
-        },
-        options: Options(
-          headers: {'Content-Type': 'application/json'},
-        ),
-      );
-
-      if (response.statusCode != 200) {
-        throw 'Server error: ${response.statusCode}';
-      }
-    } catch (e) {
-      if (e is DioException) {
-        throw 'Failed to send custom password reset email: ${e.message}';
-      }
-      if (e is FirebaseException) {
-        throw 'Failed to check database: ${e.message}';
-      }
-      throw e.toString();
     }
   }
 
   @override
   Future<void> signInWithGoogle() async {
+    if (const bool.fromEnvironment('USE_FIREBASE_EMULATORS')) throw StateError('Social login is disabled in isolated tests.');
     _isSigningIn = true;
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
@@ -538,6 +542,7 @@ class FirebaseAuthService extends AuthService {
 
   @override
   Future<void> signInWithApple() async {
+    if (const bool.fromEnvironment('USE_FIREBASE_EMULATORS')) throw StateError('Social login is disabled in isolated tests.');
     _isSigningIn = true;
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -622,6 +627,7 @@ class FirebaseAuthService extends AuthService {
     if (_currentUser != null) {
       await setOnlineStatus(false);
     }
+    await AppLocator.audio.clearState();
     _stopPresenceTimer();
     await _firebaseAuth.signOut();
     _currentUser = null;
@@ -634,6 +640,13 @@ class FirebaseAuthService extends AuthService {
   Future<void> updateSelectedLanguage(String langCode) async {
     if (_currentUser != null) {
       await _updateUserDocument(_currentUser!.copyWith(selectedLanguage: langCode));
+    }
+  }
+
+  @override
+  Future<void> updateProfilePicture(String url) async {
+    if (_currentUser != null) {
+      await _updateUserDocument(_currentUser!.copyWith(profilePictureUrl: url));
     }
   }
 
@@ -750,39 +763,20 @@ class FirebaseAuthService extends AuthService {
 
   @override
   Future<void> linkFamilyMember(String email) async {
-    if (_currentUser != null) {
-      final normalizedEmail = email.trim().toLowerCase();
-      final updatedFamily = List<String>.from(_currentUser!.familyMembers);
-      if (!updatedFamily.contains(normalizedEmail)) {
-        updatedFamily.add(normalizedEmail);
-        await _updateUserDocument(_currentUser!.copyWith(familyMembers: updatedFamily));
-        
-        try {
-          final querySnap = await _firestore.collection('users')
-              .where('email', isEqualTo: normalizedEmail)
-              .get();
-          for (final doc in querySnap.docs) {
-            await doc.reference.update({
-              'hasFamilyPremium': true,
-            });
-          }
-        } catch (e) {
-          print("Error updating linked family member hasFamilyPremium status: $e");
-        }
-      }
-    }
+    // Legacy API retained only for source compatibility. Cross-account writes
+    // are intentionally forbidden; callers must use FamilyService callables.
+    throw UnsupportedError('Use the trusted family invitation flow.');
   }
 
   @override
   Future<void> upgradeToPremium() async {
-    if (_currentUser != null) {
-      await _updateUserDocument(_currentUser!.copyWith(subscriptionStatus: 'premium'));
-    }
+    throw UnsupportedError('Premium is granted only after verified store purchase.');
   }
 
   @override
-  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false}) async {
-    if (_currentUser == null) return;
+  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false, String? expectedUserId}) async {
+    if (_currentUser == null || (expectedUserId != null && _currentUser!.id != expectedUserId) ||
+        _firebaseAuth.currentUser?.uid != _currentUser!.id) return;
     try {
       final updatedProgress = Map<String, dynamic>.from(_currentUser!.listeningProgress);
       updatedProgress['${bookId}_$langCode'] = {
@@ -800,20 +794,24 @@ class FirebaseAuthService extends AuthService {
         await _updateUserDocument(updatedUser);
         await checkAndUnlockAchievements();
       }
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint("Error updating listening progress: $e");
+      debugPrintStack(stackTrace: stack);
     }
   }
 
-  int _dailyLearningSeconds = 0;
+  final Map<String, int> _dailyLearningSeconds = {};
 
   @override
   Future<void> addLearningTime(int seconds) async {
-    _dailyLearningSeconds += seconds;
+    final accountId = _currentUser?.id;
+    if (accountId == null) return;
+    final total = (_dailyLearningSeconds[accountId] ?? 0) + seconds;
+    _dailyLearningSeconds[accountId] = total;
     // Require 60 seconds of genuine learning before counting towards streak
-    if (_dailyLearningSeconds >= 60) {
+    if (total >= 60) {
       await recordActivity();
-      _dailyLearningSeconds = 0; // reset after triggering
+      _dailyLearningSeconds[accountId] = 0;
     }
   }
 
@@ -851,6 +849,7 @@ class FirebaseAuthService extends AuthService {
   @override
   Future<void> checkAndUnlockAchievements() async {
     if (_currentUser == null) return;
+    final accountId = _currentUser!.id;
     
     final currentUnlocked = List<String>.from(_currentUser!.unlockedAchievements);
     bool newlyUnlocked = false;
@@ -863,6 +862,7 @@ class FirebaseAuthService extends AuthService {
     }
 
     final allBooks = await AppLocator.db.fetchBooks();
+    if (_currentUser?.id != accountId || _firebaseAuth.currentUser?.uid != accountId) return;
     final int streakCount = _currentUser!.streakCount;
 
     // Bilingual Explorer
@@ -995,5 +995,119 @@ class FirebaseAuthService extends AuthService {
     } catch (e) {
       debugPrint("Offline mode: Online status update queued/ignored: $e");
     }
+  }
+
+  @override
+  Future<void> deleteAccount({String? password}) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      throw Exception('No authenticated user found.');
+    }
+    final uid = user.uid;
+
+    // 1. Re-authentication before deletion
+    final provider = signInProvider;
+    if (provider == 'google.com') {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        throw auth.FirebaseAuthException(
+          code: 'canceled',
+          message: 'Re-authentication was canceled.',
+        );
+      }
+      final googleAuth = await googleUser.authentication;
+      final cred = auth.GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      await user.reauthenticateWithCredential(cred);
+    } else if (provider == 'apple.com') {
+      try {
+        final rawNonce = _generateNonce();
+        final nonce = _sha256ofString(rawNonce);
+
+        final appleCredential = await SignInWithApple.getAppleIDCredential(
+          scopes: [
+            AppleIDAuthorizationScopes.email,
+            AppleIDAuthorizationScopes.fullName,
+          ],
+          nonce: nonce,
+        );
+
+        final auth.OAuthCredential cred = auth.OAuthProvider('apple.com').credential(
+          idToken: appleCredential.identityToken,
+          rawNonce: rawNonce,
+        );
+
+        await user.reauthenticateWithCredential(cred);
+      } on SignInWithAppleAuthorizationException catch (e) {
+        if (e.code == AuthorizationErrorCode.canceled) {
+          throw auth.FirebaseAuthException(
+            code: 'canceled',
+            message: 'Apple Sign In was canceled.',
+          );
+        }
+        rethrow;
+      }
+    } else {
+      if (password == null || password.isEmpty) {
+        throw auth.FirebaseAuthException(
+          code: 'wrong-password',
+          message: 'Password is required for re-authentication.',
+        );
+      }
+      final cred = auth.EmailAuthProvider.credential(
+        email: user.email ?? '',
+        password: password,
+      );
+      await user.reauthenticateWithCredential(cred);
+    }
+
+    // 2. Call trusted backend callable
+    try {
+      final fns = FirebaseFunctions.instance;
+      await fns.httpsCallable('deleteAccount').call();
+    } catch (e) {
+      debugPrint('Error invoking deleteAccount callable: $e');
+      rethrow;
+    }
+
+    // 3. Remove that user's app-private downloaded editions/keys on current device
+    try {
+      final appDocsDir = await getApplicationDocumentsDirectory();
+      final userDir = Directory('${appDocsDir.path}/users/$uid');
+      if (userDir.existsSync()) {
+        await userDir.delete(recursive: true);
+      }
+    } catch (e) {
+      debugPrint('Error deleting local user downloads directory: $e');
+    }
+
+    // 4. Revoke FCM push token and clear local preferences for this user
+    try {
+      await NotificationService().deleteToken();
+    } catch (e) {
+      debugPrint('Error revoking push token: $e');
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_notifications_v1_$uid');
+      await prefs.remove('cached_family_invite_email_$uid');
+      await prefs.remove('current_session_id');
+    } catch (e) {
+      debugPrint('Error clearing user SharedPreferences: $e');
+    }
+
+    // 5. Clear audio, subscriptions, cached user, and local auth state
+    await _userDocSubscription?.cancel();
+    _userDocSubscription = null;
+    _stopPresenceTimer();
+    await AppLocator.audio.clearState();
+    await OfflineAvailabilityRepository.clearCachedUser();
+    _currentUser = null;
+    _isGuest = false;
+    await _firebaseAuth.signOut().catchError((_) {});
+    notifyListeners();
   }
 }

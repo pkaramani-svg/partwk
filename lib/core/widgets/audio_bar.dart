@@ -130,36 +130,35 @@ class MiniAudioBar extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: Row(
                         children: [
-                          if (coverUrl.isNotEmpty)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: DownloadService.isBookDownloadedSync(bookId)
-                                  ? Image.file(
-                                      DownloadService.getLocalCoverFileSync(bookId),
-                                      width: 40,
-                                      height: 40,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Image.network(
-                                      coverUrl,
-                                      width: 40,
-                                      height: 40,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Container(
-                                          width: 40,
-                                          height: 40,
-                                          color: Colors.grey[800],
-                                          child: const Icon(Icons.music_note, color: Colors.white, size: 20),
-                                        );
-                                      },
-                                    ),
-                            )
-                        else
-                          Icon(
-                            Icons.music_note,
-                            color: theme.colorScheme.secondary,
-                            size: 40,
+                          Builder(
+                            builder: (context) {
+                              final localCover = DownloadService.getLocalCoverFileIfExists(bookId);
+                              if (localCover != null) {
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Image.file(
+                                    localCover,
+                                    width: 40,
+                                    height: 40,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => _buildPlaceholderIcon(),
+                                  ),
+                                );
+                              }
+                              if (coverUrl.isNotEmpty && coverUrl.startsWith('http')) {
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Image.network(
+                                    coverUrl,
+                                    width: 40,
+                                    height: 40,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => _buildPlaceholderIcon(),
+                                  ),
+                                );
+                              }
+                              return _buildPlaceholderIcon();
+                            },
                           ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -232,6 +231,19 @@ class MiniAudioBar extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildPlaceholderIcon() {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      alignment: Alignment.center,
+      child: const Icon(Icons.music_note, color: Colors.tealAccent, size: 20),
     );
   }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, Settings, Activity } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Settings, Activity, Bell } from 'lucide-react';
 import './Sidebar.css';
 
 const Sidebar = () => {
@@ -30,6 +30,10 @@ const Sidebar = () => {
         <NavLink to="/content" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <BookOpen size={20} />
           <span>Content</span>
+        </NavLink>
+        <NavLink to="/popups" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <Bell size={20} />
+          <span>Popups</span>
         </NavLink>
         <div className="nav-divider"></div>
         <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>

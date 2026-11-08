@@ -1,0 +1,54 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == '9ZpveoOzAednE7Z3J5viC3hPfgC3' ||
+        ('admin' in request.auth.token && request.auth.token.admin == true) ||
+        ('email' in request.auth.token && request.auth.token.email == 'pkaramani@gmail.com' &&
+         'email_verified' in request.auth.token && request.auth.token.email_verified == true)
+      );
+    }
+
+    // Cover images: public read, admin write
+    match /covers/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Existing player and offline downloader use Firebase Storage download URLs
+    // for all published narration. Keep authenticated reads so the established
+    // sample and paid playback flow remains functional. Premium enforcement is
+    // currently at the app/content layer; tokenised download URLs must be
+    // replaced before Storage rules alone can enforce title-level entitlement.
+    match /audio/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // User profile avatars / uploads
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Draft / unpublished content: accessible by administrators only
+    match /drafts/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
+    match /draft_audio/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // Default deny all other unspecified operations
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

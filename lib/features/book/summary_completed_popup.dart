@@ -29,7 +29,7 @@ void showCompletionCelebrationPopup(BuildContext context, Book book) {
                     lang == 'ar' ? 'أكملت القراءة!' :
                     'Summary Completed!';
 
-      final message = lang == 'ku' ? 'پیرۆزە! کورتەکراوەی "${book.getTitle(lang)}" بە سەرکەوتوویی تەواو کرا.' :
+      final message = lang == 'ku' ? 'پیرۆزە! کورتکراوەی "${book.getTitle(lang)}" بە سەرکەوتوویی تەواو کرا.' :
                       lang == 'ar' ? 'تهانينا! لقد أكملت ملخص "${book.getTitle(lang)}" بنجاح.' :
                       'Congratulations! You have successfully completed the summary of "${book.getTitle(lang)}".';
 

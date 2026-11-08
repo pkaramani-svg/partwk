@@ -53,7 +53,7 @@ const UsersManagement = () => {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Form State for Edit
-  const [editForm, setEditForm] = useState({ phone: '', address: '', role: 'user', subscriptionStatus: 'free', status: 'active', familyMembers: '' });
+  const [editForm, setEditForm] = useState({ phone: '', address: '', role: 'user', subscriptionStatus: 'free', status: 'active' });
   
   // Form State for Add User
   const [addUserForm, setAddUserForm] = useState({ name: '', email: '', password: '', role: 'user', subscriptionStatus: 'free' });
@@ -105,7 +105,6 @@ const UsersManagement = () => {
       role: user.role || 'user',
       subscriptionStatus: user.subscriptionStatus || 'free',
       status: user.status || 'active',
-      familyMembers: user.familyMembers ? user.familyMembers.join(', ') : '',
       subscriptionStartDate: user.subscriptionStartDate || '',
       subscriptionExpiryDate: user.subscriptionExpiryDate || ''
     });
@@ -144,9 +143,8 @@ const UsersManagement = () => {
     e.preventDefault();
     try {
       const payload = { ...editForm };
-      if (typeof payload.familyMembers === 'string') {
-        payload.familyMembers = payload.familyMembers.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
-      }
+      // Family relationships are callable/backend-owned.
+      delete payload.familyMembers;
       
       if (payload.subscriptionStatus === 'premium') {
         if (selectedUser.subscriptionStatus !== 'premium' || !payload.subscriptionStartDate) {
@@ -543,11 +541,6 @@ const UsersManagement = () => {
                       onChange={e => setEditForm({...editForm, subscriptionExpiryDate: e.target.value ? new Date(e.target.value).toISOString() : ''})} 
                       style={{ width: '100%' }} 
                     />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#94A3B8' }}>Shared Account (Family Plan)</label>
-                    <input type="text" className="input-field" placeholder="Enter comma-separated emails..." value={editForm.familyMembers} onChange={e => setEditForm({...editForm, familyMembers: e.target.value})} style={{ width: '100%' }} />
-                    <small style={{ color: '#64748B', display: 'block', marginTop: '4px' }}>Provide emails of users this subscription is shared with.</small>
                   </div>
                 </>
               )}

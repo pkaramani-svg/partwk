@@ -27,12 +27,14 @@ class UserModel {
   
   final String? subscriptionStartDate;
   final String? subscriptionExpiryDate;
+  final String? primarySubscriptionExpiry;
   
   final bool hasFamilyPremium;
   final List<String> unlockedAchievements;
 
   final String? lastSeen;
   final Map<String, dynamic>? currentActivity;
+  final String? profilePictureUrl;
 
   UserModel({
     required this.id,
@@ -53,20 +55,28 @@ class UserModel {
     required this.createdAt,
     this.subscriptionStartDate,
     this.subscriptionExpiryDate,
+    this.primarySubscriptionExpiry,
     this.hasFamilyPremium = false,
     this.unlockedAchievements = const [],
     this.completionDetails = const {},
     this.lastSeen,
     this.currentActivity,
+    this.profilePictureUrl,
   });
+
+  String? get effectiveSubscriptionExpiry =>
+      hasFamilyPremium
+          ? (primarySubscriptionExpiry ?? subscriptionExpiryDate)
+          : subscriptionExpiryDate;
 
   bool get isPremium {
     if (subscriptionStatus != 'premium' && subscriptionStatus != 'pro' && !hasFamilyPremium) {
       return false;
     }
-    if (subscriptionExpiryDate != null && subscriptionExpiryDate!.isNotEmpty) {
+    final expiryStr = effectiveSubscriptionExpiry;
+    if (expiryStr != null && expiryStr.isNotEmpty) {
       try {
-        final expiry = DateTime.parse(subscriptionExpiryDate!);
+        final expiry = DateTime.parse(expiryStr);
         if (DateTime.now().isAfter(expiry)) {
           return false;
         }
@@ -98,11 +108,13 @@ class UserModel {
       createdAt: data['createdAt'] != null ? DateTime.parse(data['createdAt']) : DateTime.now(),
       subscriptionStartDate: data['subscriptionStartDate'],
       subscriptionExpiryDate: data['subscriptionExpiryDate'],
+      primarySubscriptionExpiry: data['primarySubscriptionExpiry'] ?? (data['hasFamilyPremium'] == true ? data['subscriptionExpiryDate'] : null),
       hasFamilyPremium: data['hasFamilyPremium'] ?? false,
       unlockedAchievements: List<String>.from(data['unlockedAchievements'] ?? []),
       completionDetails: Map<String, dynamic>.from(data['completionDetails'] ?? {}),
       lastSeen: data['lastSeen'],
       currentActivity: data['currentActivity'] != null ? Map<String, dynamic>.from(data['currentActivity']) : null,
+      profilePictureUrl: data['profilePictureUrl'] as String?,
     );
   }
 
@@ -125,11 +137,13 @@ class UserModel {
       'createdAt': createdAt.toIso8601String(),
       'subscriptionStartDate': subscriptionStartDate,
       'subscriptionExpiryDate': subscriptionExpiryDate,
+      'primarySubscriptionExpiry': primarySubscriptionExpiry,
       'hasFamilyPremium': hasFamilyPremium,
       'unlockedAchievements': unlockedAchievements,
       'completionDetails': completionDetails,
       'lastSeen': lastSeen,
       'currentActivity': currentActivity,
+      'profilePictureUrl': profilePictureUrl,
     };
   }
 
@@ -153,8 +167,10 @@ class UserModel {
     Map<String, dynamic>? completionDetails,
     String? subscriptionStartDate,
     String? subscriptionExpiryDate,
+    String? primarySubscriptionExpiry,
     String? lastSeen,
     Map<String, dynamic>? currentActivity,
+    String? profilePictureUrl,
   }) {
     return UserModel(
       id: id,
@@ -175,11 +191,13 @@ class UserModel {
       createdAt: createdAt,
       subscriptionStartDate: subscriptionStartDate ?? this.subscriptionStartDate,
       subscriptionExpiryDate: subscriptionExpiryDate ?? this.subscriptionExpiryDate,
+      primarySubscriptionExpiry: primarySubscriptionExpiry ?? this.primarySubscriptionExpiry,
       hasFamilyPremium: hasFamilyPremium ?? this.hasFamilyPremium,
       unlockedAchievements: unlockedAchievements ?? this.unlockedAchievements,
       completionDetails: completionDetails ?? this.completionDetails,
       lastSeen: lastSeen ?? this.lastSeen,
       currentActivity: currentActivity ?? this.currentActivity,
+      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
     );
   }
 

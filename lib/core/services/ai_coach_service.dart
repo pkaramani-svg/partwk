@@ -29,9 +29,9 @@ class MockAICoachService extends AICoachService {
     final q = question.toLowerCase();
     
     if (q.contains('translate this exactly')) {
-      reply = '(Mock Translation) ئەمە وەرگێڕانێکی ساختەیە. بۆ بەکارهێنانی زیرەکی دەستکردی ڕاستەقینە، تکایە کلیلی OpenAI بنووسە.';
+      reply = '(Mock Translation) ئەمە وەرگێڕانێکی تاقیکارییە.';
     } else if (q.contains('provide a short and clear definition')) {
-      reply = '(Mock Definition) پێناسەی ساختە: وشەیەکە یان ڕستەیەکە کە تەنها بۆ تاقیکردنەوە بەکاردێت. بۆ پێناسەی ڕاستەقینە کلیلی OpenAI بنووسە.';
+      reply = '(Mock Definition) پێناسەی تاقیکاری: وشەیەکە کە بۆ تاقیکردنەوە بەکاردێت.';
     } else if (langCode == 'ku') {
       reply = _generateKurdishReply(question, bookId);
     } else if (langCode == 'ar') {
@@ -52,9 +52,9 @@ class MockAICoachService extends AICoachService {
     final q = question.toLowerCase();
     
     if (q.contains('translate this')) {
-      reply = '(Mock Translation) ئەمە وەرگێڕانێکی ساختەیە. بۆ بەکارهێنانی زیرەکی دەستکردی ڕاستەقینە، تکایە کلیلی OpenAI بنووسە.';
+      reply = '(Mock Translation) ئەمە وەرگێڕانێکی تاقیکارییە.';
     } else if (q.contains('definition for this')) {
-      reply = '(Mock Definition) پێناسەی ساختە: وشەیەکە یان ڕستەیەکە کە تەنها بۆ تاقیکردنەوە بەکاردێت. بۆ پێناسەی ڕاستەقینە کلیلی OpenAI بنووسە.';
+      reply = '(Mock Definition) پێناسەی تاقیکاری: وشەیەکە کە بۆ تاقیکردنەوە بەکاردێت.';
     } else if (langCode == 'ku') {
       reply = _generateKurdishReply(question, bookId);
     } else if (langCode == 'ar') {
@@ -89,7 +89,7 @@ class MockAICoachService extends AICoachService {
     } else if (q.contains('بۆچی')) {
       return "ئەمە زۆر گرنگە چونکە مێشکی مرۆڤ کاتێک تووشی بێهیوایی دەبێت کە بەبێ پلان کار بکات. پاراستنی وزە کلیلی سەرکەوتنی بەردەوامە.";
     } else {
-      return "پرسیارێکی زۆر باشە. ئەم کورتەکراوەیە جەخت لەسەر ئەوە دەکاتەوە کە فێربوونی ڕاستەقینە کاتێک ڕوودەدات کە تۆ زانیارییەکان لە ژیانی ڕۆژانەتدا بەکاربهێنیت.";
+      return "پرسیارێکی زۆر باشە. ئەم کورتکراوەیە جەخت لەسەر ئەوە دەکاتەوە کە فێربوونی ڕاستەقینە کاتێک ڕوودەدات کە تۆ زانیارییەکان لە ژیانی ڕۆژانەتدا بەکاربهێنیت.";
     }
   }
 

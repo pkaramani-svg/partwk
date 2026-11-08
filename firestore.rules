@@ -1,0 +1,202 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for trusted authentication and authorization
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == '9ZpveoOzAednE7Z3J5viC3hPfgC3' ||
+        ('admin' in request.auth.token && request.auth.token.admin == true) ||
+        ('email' in request.auth.token && request.auth.token.email == 'pkaramani@gmail.com' &&
+         'email_verified' in request.auth.token && request.auth.token.email_verified == true)
+      );
+    }
+
+    function activeEntitlement(uid) {
+      let path = /databases/$(database)/documents/entitlements/$(uid);
+      return exists(path) && get(path).data.status == 'active' &&
+        (!('expiresAt' in get(path).data) || get(path).data.expiresAt == null || get(path).data.expiresAt > request.time);
+    }
+
+    function canReadStudy(data) {
+      let bookPath = /databases/$(database)/documents/books/$(data.bookId);
+      let entitlementPath = /databases/$(database)/documents/entitlements/$(request.auth.uid);
+      return isSignedIn() && exists(bookPath) &&
+        (!('isPublished' in get(bookPath).data) || get(bookPath).data.isPublished != false) &&
+        (!('hiddenLanguages' in get(bookPath).data) || !(data.langCode in get(bookPath).data.hiddenLanguages)) &&
+        ((!('isPremium' in get(bookPath).data) || get(bookPath).data.isPremium != true) ||
+          (activeEntitlement(request.auth.uid) &&
+            (get(entitlementPath).data.source != 'family' ||
+              familyStudyAccess(request.auth.uid, get(entitlementPath).data.ownerUid))));
+    }
+
+    function familyStudyAccess(memberUid, ownerUid) {
+      let family = /databases/$(database)/documents/families/$(ownerUid);
+      let member = /databases/$(database)/documents/familyMemberships/$(memberUid);
+      let owner = /databases/$(database)/documents/entitlements/$(ownerUid);
+      return activeEntitlement(ownerUid) && get(owner).data.source != 'family' &&
+        exists(family) && get(family).data.memberUid == memberUid &&
+        exists(member) && get(member).data.ownerUid == ownerUid && get(member).data.state == 'active';
+    }
+
+    // --- USERS COLLECTION ---
+    match /users/{userId} {
+      // Root profiles are private. Family state is exposed through the minimal
+      // familyMemberships projection below, never through another user's profile.
+      allow read: if isOwner(userId) || isAdmin();
+
+      // New user creation: ordinary users cannot self-assign admin roles or premium status
+      allow create: if isOwner(userId) && (
+                        (!('role' in request.resource.data) || request.resource.data.role == 'user') &&
+                        (!('subscriptionStatus' in request.resource.data) || request.resource.data.subscriptionStatus == 'free') &&
+                        (!('subscriptionStartDate' in request.resource.data) || request.resource.data.subscriptionStartDate == null) &&
+                        (!('subscriptionExpiryDate' in request.resource.data) || request.resource.data.subscriptionExpiryDate == null) &&
+                        (!('hasFamilyPremium' in request.resource.data) || request.resource.data.hasFamilyPremium == false) &&
+                        (!('familyMembers' in request.resource.data) || request.resource.data.familyMembers == []) &&
+                        (!('status' in request.resource.data) || request.resource.data.status != 'suspended')
+                      ) || isAdmin();
+
+      // Profile updates: ordinary users cannot modify role, subscription, status or family entitlement
+      allow update: if (isOwner(userId) &&
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                          'role', 'subscriptionStatus', 'subscriptionStartDate',
+                          'subscriptionExpiryDate', 'hasFamilyPremium', 'familyMembers', 'status'
+                        ])) || isAdmin();
+
+      // Deletion: owner can delete (for store-required account deletion) or admin
+      allow delete: if isOwner(userId) || isAdmin();
+
+      // User private subcollections
+      match /notes/{noteId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      match /highlights/{highlightId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Backend-issued entitlement projection. A user may read only their own
+    // effective access/expiry; all writes are Admin SDK only.
+    match /entitlements/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if false;
+    }
+
+    // Minimal, UID-based family status projection. Direct clients cannot
+    // create invitations, alter a relationship, or grant entitlement.
+    match /familyMemberships/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if false;
+    }
+
+    match /families/{ownerId} {
+      allow read: if isOwner(ownerId) || isAdmin();
+      allow write: if false;
+    }
+
+    // Chapter text is returned only by the trusted callable, which checks the
+    // current owner subscription and family relationship on every request.
+    match /premiumBookText/{bookId} {
+      allow read, write: if false;
+    }
+
+    match /unpublishedBookLanguages/{bookId} {
+      allow read, write: if false;
+    }
+
+    // --- BOOKS COLLECTION (PUBLISHED) ---
+    match /books/{bookId} {
+      // Published books are readable by all users (for app preview and catalog)
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- BOOKS_DRAFT COLLECTION (DRAFTS / UNPUBLISHED) ---
+    match /books_draft/{bookId} {
+      // Drafts are strictly accessible by administrators only
+      allow read, write: if isAdmin();
+    }
+
+    // --- QUIZZES & FLASHCARDS ---
+    match /quizzes/{quizId} {
+      allow read: if isAdmin() || canReadStudy(resource.data);
+      allow write: if isAdmin();
+    }
+
+    match /flashcards/{cardId} {
+      allow read: if isAdmin() || canReadStudy(resource.data);
+      allow write: if isAdmin();
+    }
+
+    match /quizzes_draft/{quizId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /flashcards_draft/{cardId} {
+      allow read, write: if isAdmin();
+    }
+
+    // --- NOTES (PRIVATE USER DATA) ---
+    match /notes/{noteId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // --- HIGHLIGHTS (PRIVATE USER DATA) ---
+    match /highlights/{highlightId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // --- CATEGORIES, LEARNING PATHS, ACHIEVEMENTS ---
+    match /categories/{catId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /learning_paths/{pathId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /achievements/{achId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- POPUPS & ANNOUNCEMENTS ---
+    match /popups/{popupId} {
+      allow read: if (resource.data.status == 'active') || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // --- GLOBAL SETTINGS ---
+    match /settings/{settingId} {
+      allow read: if settingId == 'global' || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // --- AUDIT LOGS (IMMUTABLE LOGS) ---
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false; // Append-only audit trail
+    }
+
+    // Default deny for anything unspecified
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

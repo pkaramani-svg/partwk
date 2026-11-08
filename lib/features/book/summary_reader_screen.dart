@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'dart:convert';
 import 'package:uuid/uuid.dart';
+import '../../core/services/protected_text_service.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/services/service_locator.dart';
 import '../../models/book.dart';
@@ -14,14 +17,18 @@ import '../../core/services/download_manager.dart';
 import '../../core/services/licence_manager.dart';
 import '../../core/services/network_guard.dart';
 import '../auth/login_register_screen.dart';
+import '../profile/paywall_screen.dart';
+import '../../core/widgets/partwk_toolbar_button.dart';
 
 class SummaryReaderScreen extends StatefulWidget {
   final String bookId;
   final int initialChapterIndex;
+  final String? languageCode;
   const SummaryReaderScreen({
     Key? key,
     required this.bookId,
     this.initialChapterIndex = 0,
+    this.languageCode,
   }) : super(key: key);
 
   @override
@@ -40,10 +47,15 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
   bool _showSettingsPanel = false;
   ImageProvider? _coverProvider;
   String? _licenceError;
+  String? _errorTitle;
+  IconData? _errorIcon;
+  String? _actionButtonText;
+  VoidCallback? _customErrorAction;
   bool _isPremiumExpired = false;
 
   // Highlights state
   List<Highlight> _savedHighlights = [];
+  String? _selectedText;
 
   // Notes state
   final TextEditingController _noteInputController = TextEditingController();
@@ -53,9 +65,28 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
   @override
   void initState() {
     super.initState();
-    _currentChapterIndex = widget.initialChapterIndex;
+    final audioService = AppLocator.audio;
+    if (audioService.isPlaying && audioService.currentBookId == widget.bookId) {
+      _currentChapterIndex = audioService.currentChapterIndex;
+    } else {
+      _currentChapterIndex = widget.initialChapterIndex;
+    }
     _chapterStartTime = DateTime.now();
     _loadBook();
+    audioService.addListener(_onAudioServiceChanged);
+  }
+
+  void _onAudioServiceChanged() {
+    final audioService = AppLocator.audio;
+    if (audioService.isPlaying && audioService.currentBookId == widget.bookId) {
+      if (_currentChapterIndex != audioService.currentChapterIndex) {
+        if (mounted) {
+          setState(() {
+            _currentChapterIndex = audioService.currentChapterIndex;
+          });
+        }
+      }
+    }
   }
   
   void _recordLearningTime() {
@@ -115,66 +146,135 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
         });
       }
 
-      // Check offline capability and encryption
-      final isDownloaded = await DownloadManager.isBookDownloaded(book.id);
-      if (isDownloaded) {
-        try {
-          book = await DownloadManager.loadBookContent(book);
-        } on LicenceInvalidException catch (e) {
+      final activeLang = widget.languageCode ?? AppLocalizations.of(context)!.locale.languageCode;
+      final hasNet = await NetworkGuard.hasConnection();
+
+      if (!hasNet) {
+        // App is genuinely offline: only load if exact edition is downloaded
+        final isDownloaded = await DownloadManager.isEditionDownloaded(book.id, activeLang);
+        if (isDownloaded) {
+          try {
+            book = await DownloadManager.loadBookContent(book, languageCode: activeLang);
+          } on LicenceInvalidException catch (_) {
+            setState(() {
+              _licenceError = 'Connect to the internet to stream or download this edition.';
+              _isLoading = false;
+            });
+            return;
+          } on LicenceExpiredException catch (_) {
+            setState(() {
+              _licenceError = 'Your premium access has ended. Renew Premium to access downloaded summaries.';
+              _isPremiumExpired = true;
+              _isLoading = false;
+            });
+            return;
+          } catch (_) {
+            setState(() {
+              _licenceError = 'Connect to the internet to stream or download this edition.';
+              _isLoading = false;
+            });
+            return;
+          }
+        } else {
           setState(() {
-            _licenceError = 'Connect to the internet to download or stream this title.';
-            _isLoading = false;
-          });
-          return;
-        } on LicenceExpiredException catch (e) {
-          setState(() {
-            _licenceError = 'Your premium access has ended. Renew Premium to access downloaded summaries.';
-            _isPremiumExpired = true;
-            _isLoading = false;
-          });
-          return;
-        } catch (e) {
-          setState(() {
-            _licenceError = 'Connect to the internet to download or stream this title.';
+            _licenceError = 'Connect to the internet to stream or download this edition.';
             _isLoading = false;
           });
           return;
         }
       } else {
-        // If not downloaded and offline, we must block reading
-        final hasNet = await NetworkGuard.hasConnection();
-        if (!hasNet) {
-          setState(() {
-            _licenceError = 'Connect to the internet to download or stream this title.';
-            _isLoading = false;
-          });
-          return;
+        // App is online: load currently selected language from normal online source
+        if (book.isPremium) {
+          if (!mounted) return;
+          book = await ProtectedTextService.hydrate(book, activeLang);
         }
       }
 
       if (mounted) {
-        final langCode = AppLocalizations.of(context)!.locale.languageCode;
         setState(() {
           _book = book;
-          _coverProvider = DownloadService.getBookCoverProvider(book, langCode: langCode);
+          _coverProvider = DownloadService.getBookCoverProvider(book, langCode: activeLang);
           _isLoading = false;
         });
         AppLocator.auth.updatePresence(
           screen: 'Reading Summary',
-          bookTitle: book.getTitle(langCode),
+          bookTitle: book.getTitle(activeLang),
           bookId: book.id,
           activityType: 'reading',
         );
-        if (AppLocator.auth.isGuest && _currentChapterIndex >= 2) {
+        if (book.isPremium && AppLocator.auth.isGuest && _currentChapterIndex >= 2) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _showRegisterPopup();
           });
         }
       }
-    } catch (e) {
+    } on ContentPermissionDeniedException catch (e) {
       if (mounted) {
         setState(() {
-          _licenceError = 'Connect to the internet to download or stream this title.';
+          _errorTitle = 'Premium Access Required';
+          _licenceError = e.message;
+          _errorIcon = Icons.workspace_premium;
+          _actionButtonText = 'Upgrade to Premium';
+          _customErrorAction = () {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const PaywallScreen()),
+            );
+          };
+          _isLoading = false;
+        });
+      }
+    } on ContentUnauthenticatedException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorTitle = 'Sign In Required';
+          _licenceError = e.message;
+          _errorIcon = Icons.account_circle_outlined;
+          _actionButtonText = 'Sign In';
+          _customErrorAction = () {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const LoginRegisterScreen()),
+            );
+          };
+          _isLoading = false;
+        });
+      }
+    } on UnpublishedLanguageException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorTitle = 'Language Unavailable';
+          _licenceError = e.message;
+          _errorIcon = Icons.translate;
+          _actionButtonText = 'Go Back';
+          _customErrorAction = null;
+          _isLoading = false;
+        });
+      }
+    } on ContentUnavailableException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorTitle = 'Content Unavailable';
+          _licenceError = e.message;
+          _errorIcon = Icons.error_outline;
+          _actionButtonText = 'Go Back';
+          _customErrorAction = null;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        final hasNet = await NetworkGuard.hasConnection();
+        setState(() {
+          if (!hasNet) {
+            _errorTitle = 'Offline Mode';
+            _licenceError = 'Connect to the internet to download or stream this title.';
+            _errorIcon = Icons.wifi_off_outlined;
+          } else {
+            _errorTitle = 'Error Loading Title';
+            _licenceError = 'Unable to load book text. Please try again.';
+            _errorIcon = Icons.error_outline;
+          }
+          _actionButtonText = 'Go Back';
+          _customErrorAction = null;
           _isLoading = false;
         });
       }
@@ -279,6 +379,7 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
   @override
   void dispose() {
     _noteInputController.dispose();
+    AppLocator.audio.removeListener(_onAudioServiceChanged);
     super.dispose();
   }
 
@@ -289,6 +390,9 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
     final langCode = localizations.locale.languageCode;
 
     if (_licenceError != null) {
+      final title = _errorTitle ?? (_isPremiumExpired ? 'Premium Expired' : 'Offline Mode');
+      final icon = _errorIcon ?? (_isPremiumExpired ? Icons.lock_clock : Icons.wifi_off_outlined);
+      final actionLabel = _actionButtonText ?? 'Go Back';
       return Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
@@ -296,7 +400,8 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
           foregroundColor: Colors.black,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(Icons.arrow_back_rounded),
+            tooltip: AppLocalizations.of(context)?.translate('back') ?? 'Back',
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
@@ -307,13 +412,13 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  _isPremiumExpired ? Icons.lock_clock : Icons.wifi_off_outlined,
+                  icon,
                   size: 80,
                   color: Colors.amber[800],
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  _isPremiumExpired ? 'Premium Expired' : 'Offline Mode',
+                  title,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
@@ -328,12 +433,12 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
                 ),
                 const SizedBox(height: 32),
                 ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: _customErrorAction ?? () => Navigator.of(context).pop(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Go Back'),
+                  child: Text(actionLabel),
                 ),
               ],
             ),
@@ -360,117 +465,259 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
       key: _scaffoldKey,
       backgroundColor: _isDarkReader ? Colors.black : Colors.white,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: _isDarkReader ? Colors.black : Colors.white,
         foregroundColor: _isDarkReader ? Colors.white : Colors.black,
         elevation: 0.5,
-        iconTheme: IconThemeData(color: _isDarkReader ? Colors.white : Colors.black),
-        title: Text(
-          _book!.getTitle(langCode), 
-          style: TextStyle(fontSize: 16, color: _isDarkReader ? Colors.white : Colors.black),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.headphones),
-            tooltip: localizations.translate('listen_chapter'),
-            color: _isDarkReader ? Colors.white : Colors.black,
-            onPressed: () {
-              final chapters = _book!.getChapterSummaries(langCode).cast<Map<String, dynamic>>();
-              final globalAudioUrl = _book!.getAudioUrl(langCode);
-              final coverUrl = _book!.getCoverImageUrl(langCode);
-              final audioService = AppLocator.audio;
-              
-              final isCurrentBook = audioService.currentBookId == _book!.id && audioService.currentLangCode == langCode;
-              
-              int startPos = 0;
-              if (isCurrentBook && audioService.currentChapterIndex == _currentChapterIndex) {
-                if (!audioService.isPlaying) {
-                  audioService.resume();
-                }
-              } else {
-                var progress = AppLocator.auth.currentUser?.listeningProgress['${_book!.id}_$langCode'];
-                if (progress == null) {
-                  final prefix = '${_book!.id}_';
-                  final matchingKey = AppLocator.auth.currentUser?.listeningProgress.keys.firstWhere(
-                    (k) => k.startsWith(prefix),
-                    orElse: () => '',
-                  ) ?? '';
-                  if (matchingKey.isNotEmpty) {
-                    progress = AppLocator.auth.currentUser?.listeningProgress[matchingKey];
-                  }
-                }
-                if (progress != null && progress['chapterIndex'] == _currentChapterIndex) {
-                  startPos = progress['positionSeconds'] ?? 0;
-                }
-                
-                audioService.play(
-                  _book!.id,
-                  langCode,
-                  _book!.getTitle(langCode),
-                  coverUrl,
-                  globalAudioUrl,
-                  chapters,
-                  startIndex: _currentChapterIndex,
-                  startPosition: startPos,
-                  bookDurationSecs: _book!.getDurationForLanguage(langCode),
-                );
-              }
-              
-              Navigator.of(context).pushReplacement(MaterialPageRoute(
-                builder: (_) => AudioPlayerScreen(
-                  bookId: _book!.id, 
-                  langCode: langCode,
-                  bookTitle: _book!.getTitle(langCode), 
-                  coverUrl: coverUrl, 
-                  globalAudioUrl: globalAudioUrl,
-                  chapters: chapters,
-                  initialChapterIndex: _currentChapterIndex,
-                  initialPositionSecs: startPos,
-                  bookDurationSecs: _book!.getDurationForLanguage(langCode),
+        titleSpacing: 16,
+        title: Builder(
+          builder: (context) {
+            final chapters = _book!.getChapterSummaries(langCode);
+            final currentChapterTitle = (chapters.isNotEmpty && _currentChapterIndex < chapters.length)
+                ? (chapters[_currentChapterIndex]['title']?.toString() ?? '')
+                : '';
+
+            return Row(
+              children: [
+                PartwkToolbarButton(
+                  icon: Icons.arrow_back_rounded,
+                  tooltip: localizations.translate('back'),
+                  size: 40,
+                  iconSize: 22,
+                  isDark: _isDarkReader,
+                  onPressed: () async {
+                    _recordLearningTime();
+                    await StreakTracker.checkAndShowStreakPopup(context);
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  },
                 ),
-              ));
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.psychology_alt, size: 26),
-            tooltip: localizations.translate('quiz'),
-            color: _isDarkReader ? Colors.white : Colors.black,
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => QuizScreen(bookId: _book!.id)),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.amp_stories, size: 24),
-            tooltip: localizations.translate('flashcards'),
-            color: _isDarkReader ? Colors.white : Colors.black,
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => FlashcardsScreen(bookId: _book!.id)),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.note_add_outlined),
-            tooltip: localizations.translate('add_note'),
-            color: _isDarkReader ? Colors.white : Colors.black,
-            onPressed: _showAddNoteDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.text_fields),
-            tooltip: localizations.translate('reader_settings'),
-            color: _showSettingsPanel ? theme.colorScheme.secondary : (_isDarkReader ? Colors.white : Colors.black),
-            onPressed: () {
-              setState(() {
-                _showSettingsPanel = !_showSettingsPanel;
-              });
-            },
-          ),
-        ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _book!.getTitle(langCode),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: _isDarkReader ? Colors.white : Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (currentChapterTitle.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Text(
+                            currentChapterTitle,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: _isDarkReader ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                PartwkToolbarButton(
+                  icon: Icons.headphones_rounded,
+                  tooltip: localizations.translate('listen_chapter'),
+                  size: 40,
+                  isDark: _isDarkReader,
+                  onPressed: () => _startAudioFromReader(langCode),
+                ),
+                const SizedBox(width: 8),
+                PartwkToolbarButton(
+                  icon: Icons.text_format_rounded,
+                  tooltip: localizations.translate('reader_settings'),
+                  size: 40,
+                  isDark: _isDarkReader,
+                  isActive: _showSettingsPanel,
+                  onPressed: () {
+                    setState(() {
+                      _showSettingsPanel = !_showSettingsPanel;
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                PopupMenuButton<String>(
+                  tooltip: localizations.translate('more_options'),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: _isDarkReader ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08),
+                    ),
+                  ),
+                  color: _isDarkReader ? const Color(0xFF1E293B) : Colors.white,
+                  elevation: 8,
+                  offset: const Offset(0, 48),
+                  onSelected: (value) {
+                    if (value == 'quiz') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => QuizScreen(bookId: _book!.id)),
+                      );
+                    } else if (value == 'flashcards') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => FlashcardsScreen(bookId: _book!.id)),
+                      );
+                    } else if (value == 'note') {
+                      _showAddNoteDialog();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem<String>(
+                      value: 'quiz',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.psychology_outlined,
+                            size: 20,
+                            color: _isDarkReader ? Colors.white70 : Colors.black87,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            localizations.translate('quiz'),
+                            style: TextStyle(
+                              color: _isDarkReader ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'flashcards',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.auto_stories_outlined,
+                            size: 20,
+                            color: _isDarkReader ? Colors.white70 : Colors.black87,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            localizations.translate('flashcards'),
+                            style: TextStyle(
+                              color: _isDarkReader ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'note',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.edit_note_rounded,
+                            size: 20,
+                            color: _isDarkReader ? Colors.white70 : Colors.black87,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            localizations.translate('add_note'),
+                            style: TextStyle(
+                              color: _isDarkReader ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  child: IgnorePointer(
+                    child: PartwkToolbarButton(
+                      icon: Icons.more_horiz_rounded,
+                      tooltip: localizations.translate('more_options'),
+                      size: 40,
+                      isDark: _isDarkReader,
+                      onPressed: () {},
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
       body: _buildSingleChapterView(langCode),
       ),
     );
+  }
+
+  void _startAudioFromReader(String langCode) {
+    final chapters = _book!.getChapterSummaries(langCode).cast<Map<String, dynamic>>();
+    final globalAudioUrl = _book!.getAudioUrl(langCode);
+    final coverUrl = _book!.getCoverImageUrl(langCode);
+    final audioService = AppLocator.audio;
+    
+    final isCurrentBook = audioService.currentBookId == _book!.id && audioService.currentLangCode == langCode;
+    
+    int initialIndex = _currentChapterIndex;
+    int startPos = 0;
+
+    if (isCurrentBook) {
+      initialIndex = audioService.currentChapterIndex;
+      startPos = audioService.position.inSeconds;
+      if (!audioService.isPlaying) {
+        audioService.resume();
+      }
+    } else {
+      var progress = AppLocator.auth.currentUser?.listeningProgress['${_book!.id}_$langCode'];
+      if (progress == null) {
+        final prefix = '${_book!.id}_';
+        final matchingKey = AppLocator.auth.currentUser?.listeningProgress.keys.firstWhere(
+          (k) => k.startsWith(prefix),
+          orElse: () => '',
+        ) ?? '';
+        if (matchingKey.isNotEmpty) {
+          progress = AppLocator.auth.currentUser?.listeningProgress[matchingKey];
+        }
+      }
+      if (progress != null && progress['chapterIndex'] == _currentChapterIndex) {
+        startPos = progress['positionSeconds'] ?? 0;
+      }
+      
+      audioService.play(
+        _book!.id,
+        langCode,
+        _book!.getTitle(langCode),
+        coverUrl,
+        globalAudioUrl,
+        chapters,
+        startIndex: _currentChapterIndex,
+        startPosition: startPos,
+        bookDurationSecs: _book!.getDurationForLanguage(langCode),
+        isPremium: _book!.isPremium,
+      );
+    }
+    
+    Navigator.of(context).pushReplacement(MaterialPageRoute(
+      builder: (_) => AudioPlayerScreen(
+        bookId: _book!.id, 
+        langCode: langCode,
+        bookTitle: _book!.getTitle(langCode), 
+        coverUrl: coverUrl, 
+        globalAudioUrl: globalAudioUrl,
+        chapters: chapters,
+        initialChapterIndex: initialIndex,
+        initialPositionSecs: startPos,
+        bookDurationSecs: _book!.getDurationForLanguage(langCode),
+        isPremium: _book!.isPremium,
+      ),
+    ));
   }
 
   Widget _buildSingleChapterView(String langCode) {
@@ -557,12 +804,7 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
               children: [
                 if (_currentChapterIndex > 0)
                   TextButton.icon(
-                    onPressed: () {
-                      _recordLearningTime();
-                      setState(() {
-                        _currentChapterIndex--;
-                      });
-                    },
+                    onPressed: () => _updateChapterIndex(_currentChapterIndex - 1, chapters, langCode),
                     icon: Icon(Icons.arrow_back_ios, size: 16, color: _isDarkReader ? Colors.white70 : Colors.black87),
                     label: Text(localizations.translate('previous')),
                     style: TextButton.styleFrom(
@@ -575,15 +817,12 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
                 if (_currentChapterIndex < chapters.length - 1)
                   ElevatedButton.icon(
                     onPressed: () async {
-                      if (AppLocator.auth.isGuest && (_currentChapterIndex + 1) >= 2) {
+                      if (_book!.isPremium && AppLocator.auth.isGuest && (_currentChapterIndex + 1) >= 2) {
                         _showRegisterPopup();
                         return;
                       }
-                      _recordLearningTime();
                       await StreakTracker.trackKeypointCompleted(_book!.id, _currentChapterIndex);
-                      setState(() {
-                        _currentChapterIndex++;
-                      });
+                      _updateChapterIndex(_currentChapterIndex + 1, chapters, langCode);
                     },
                     icon: const Icon(Icons.arrow_forward_ios, size: 16),
                     label: Text(localizations.translate('next_chapter')),
@@ -733,9 +972,9 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
   // Interactive highlight text reader
   Widget _buildReaderContent(String content) {
     final theme = Theme.of(context);
+    final loc = AppLocalizations.of(context)!;
 
-    if (AppLocator.auth.isGuest && _currentChapterIndex >= 2) {
-      final loc = AppLocalizations.of(context)!;
+    if ((_book?.isPremium == true) && AppLocator.auth.isGuest && _currentChapterIndex >= 2) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         padding: const EdgeInsets.all(24),
@@ -786,39 +1025,260 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
         .where((p) => p.isNotEmpty)
         .join('\n\n');
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: SelectableText(
-        formattedContent,
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontSize: _fontSize,
-          height: 1.7,
-          color: _isDarkReader ? Colors.white.withOpacity(0.9) : Colors.black87,
+    final langCode = loc.locale.languageCode;
+
+    final isRtl = langCode == 'ku' || langCode == 'ar';
+
+    return Directionality(
+      textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: SelectionArea(
+          onSelectionChanged: (SelectedContent? selection) {
+            _selectedText = selection?.plainText;
+          },
+          contextMenuBuilder: (BuildContext context, SelectableRegionState selectableRegionState) {
+            final List<ContextMenuButtonItem> buttonItems = [
+              ContextMenuButtonItem(
+                label: loc.translate('define'),
+                onPressed: () {
+                  selectableRegionState.hideToolbar();
+                  if (_selectedText != null && _selectedText!.isNotEmpty) {
+                    _showDefinitionPopup(_selectedText!);
+                  }
+                },
+              ),
+              ContextMenuButtonItem(
+                label: loc.translate('highlight'),
+                onPressed: () {
+                  selectableRegionState.hideToolbar();
+                  if (_selectedText != null && _selectedText!.isNotEmpty) {
+                    _showHighlightOptionSheet(_selectedText!);
+                  }
+                },
+              ),
+            ];
+
+            return AdaptiveTextSelectionToolbar.buttonItems(
+              anchors: selectableRegionState.contextMenuAnchors,
+              buttonItems: buttonItems,
+            );
+          },
+          child: Text(
+            formattedContent,
+            textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+            textAlign: isRtl ? TextAlign.right : TextAlign.left,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontSize: _fontSize,
+              height: 1.7,
+              color: _isDarkReader ? Colors.white.withOpacity(0.9) : Colors.black87,
+            ),
+          ),
         ),
-        onTap: () {
-          if (_showSettingsPanel) {
-            setState(() {
-              _showSettingsPanel = false;
-            });
-          }
-        },
-        contextMenuBuilder: (BuildContext context, EditableTextState editableTextState) {
-          final List<ContextMenuButtonItem> buttonItems = [
-            ContextMenuButtonItem(
-              label: 'Highlight',
-              onPressed: () {
-                final selectedText = editableTextState.textEditingValue.selection.textInside(editableTextState.textEditingValue.text);
-                editableTextState.hideToolbar();
-                _showHighlightOptionSheet(selectedText);
+      ),
+    );
+  }
+
+  void _showDefinitionPopup(String selectedText) {
+    final words = selectedText.trim().split(RegExp(r'\s+'));
+    final rawWord = words.isNotEmpty ? words.first : selectedText;
+    final cleanWord = rawWord.trim().replaceAll(RegExp(r'[^\w\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u0720-\u072F]'), '');
+    if (cleanWord.isEmpty) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        final loc = AppLocalizations.of(context)!;
+        final theme = Theme.of(context);
+        final langCode = loc.locale.languageCode;
+
+        return Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 320, maxHeight: 280),
+            margin: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _isDarkReader ? Colors.grey[900] : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: FutureBuilder<String?>(
+              future: AppLocator.db.getDefinition(cleanWord, langCode),
+              builder: (context, snapshot) {
+                final isLoading = snapshot.connectionState == ConnectionState.waiting;
+                final definition = snapshot.data;
+
+                return Material(
+                  color: Colors.transparent,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              cleanWord,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: _isDarkReader ? Colors.white : Colors.black87,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close, size: 20, color: _isDarkReader ? Colors.white60 : Colors.black54),
+                            onPressed: () => Navigator.pop(context),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: isLoading
+                              ? const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 24),
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                )
+                              : _buildDefinitionContent(definition, theme, loc),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
               },
             ),
-          ];
+          ),
+        );
+      },
+    );
+  }
 
-          return AdaptiveTextSelectionToolbar.buttonItems(
-            anchors: editableTextState.contextMenuAnchors,
-            buttonItems: buttonItems,
+  Widget _buildDefinitionContent(String? definition, ThemeData theme, AppLocalizations loc) {
+    if (definition == null || definition.isEmpty) {
+      return Text(
+        loc.translate('definition_not_found'),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: Colors.redAccent,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+
+    if (definition.startsWith('{') && definition.endsWith('}')) {
+      try {
+        final Map<String, dynamic> data = jsonDecode(definition);
+        if (data['is_structured'] == true) {
+          final word = data['word'] as String;
+          final dialect = data['dialect_tag'] as String;
+          final pos = data['part_of_speech'] as String;
+          final defCkb = data['definition_ckb'] as String;
+          final synonyms = List<String>.from(data['synonyms'] ?? []);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      pos.toUpperCase(),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.dividerColor.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      dialect,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: _isDarkReader ? Colors.grey[400] : Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                defCkb,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _isDarkReader ? Colors.grey[200] : Colors.black87,
+                  height: 1.6,
+                  fontSize: 15,
+                ),
+              ),
+              if (synonyms.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Text(
+                  loc.translate('synonyms') ?? 'هاوواتاکان',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: _isDarkReader ? Colors.white70 : Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: synonyms.map((syn) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: theme.dividerColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.1),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        syn,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: _isDarkReader ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ],
           );
-        },
+        }
+      } catch (_) {}
+    }
+
+    return Text(
+      definition,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: _isDarkReader ? Colors.grey[300] : Colors.black87,
+        height: 1.5,
       ),
     );
   }
@@ -892,5 +1352,35 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
         ),
       ),
     );
+  }
+
+  void _updateChapterIndex(int newIndex, List<Map<String, dynamic>> chapters, String langCode) {
+    _recordLearningTime();
+    setState(() {
+      _currentChapterIndex = newIndex;
+    });
+
+    // Synchronize audio playback to this index if audio is playing for this book
+    final audioService = AppLocator.audio;
+    if (audioService.isPlaying && audioService.currentBookId == _book!.id) {
+      audioService.removeListener(_onAudioServiceChanged);
+      
+      final globalAudioUrl = _book!.getAudioUrl(langCode);
+      final coverUrl = _book!.getCoverImageUrl(langCode);
+      
+      audioService.play(
+        _book!.id,
+        langCode,
+        _book!.getTitle(langCode),
+        coverUrl,
+        globalAudioUrl,
+        chapters,
+        startIndex: newIndex,
+        startPosition: 0,
+        bookDurationSecs: _book!.getDurationForLanguage(langCode),
+      );
+      
+      audioService.addListener(_onAudioServiceChanged);
+    }
   }
 }

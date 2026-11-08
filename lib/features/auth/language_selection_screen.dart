@@ -11,87 +11,101 @@ class LanguageSelectionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final languageState = Provider.of<AppLanguageState>(context);
+    final localizations = AppLocalizations(languageState.locale);
 
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              // Icon representation
-              Center(
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.secondary.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.translate,
-                    size: 36,
-                    color: theme.colorScheme.secondary,
+    return Directionality(
+      textDirection: languageState.textDirection,
+      child: Scaffold(
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Spacer(),
+                // Icon representation
+                Center(
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.secondary.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.translate_rounded,
+                      size: 36,
+                      color: theme.colorScheme.secondary,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Select Your Language',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 24,
+                const SizedBox(height: 24),
+                Text(
+                  localizations.translate('select_your_language'),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Choose your preferred language for book summaries and narrator voices. You can change this anytime in settings.',
-                style: theme.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 48),
-              
-              // Language Cards
-              _buildLanguageCard(
-                context,
-                title: 'English',
-                code: 'en',
-                isSelected: languageState.locale.languageCode == 'en',
-                onTap: () => languageState.setLanguage('en'),
-              ),
-              const SizedBox(height: 16),
-              _buildLanguageCard(
-                context,
-                title: 'کوردی (سۆرانی)',
-                code: 'ku',
-                isSelected: languageState.locale.languageCode == 'ku',
-                onTap: () => languageState.setLanguage('ku'),
-              ),
-              const SizedBox(height: 16),
-              _buildLanguageCard(
-                context,
-                title: 'العربية',
-                code: 'ar',
-                isSelected: languageState.locale.languageCode == 'ar',
-                onTap: () => languageState.setLanguage('ar'),
-              ),
-              
-              const Spacer(),
-              ElevatedButton(
-                onPressed: () {
-                  if (isFromSettings) {
-                    Navigator.of(context).pop();
-                  } else {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-                    );
-                  }
-                },
-                child: Text(isFromSettings ? 'Save & Return' : 'Continue'),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  localizations.translate('select_language_desc'),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 48),
+                
+                // Language Cards
+                _buildLanguageCard(
+                  context,
+                  title: 'English',
+                  code: 'en',
+                  isSelected: languageState.locale.languageCode == 'en',
+                  onTap: () => languageState.setLanguage('en'),
+                ),
+                const SizedBox(height: 16),
+                _buildLanguageCard(
+                  context,
+                  title: 'کوردی (سۆرانی)',
+                  code: 'ku',
+                  isSelected: languageState.locale.languageCode == 'ku',
+                  onTap: () => languageState.setLanguage('ku'),
+                ),
+                const SizedBox(height: 16),
+                _buildLanguageCard(
+                  context,
+                  title: 'العربية',
+                  code: 'ar',
+                  isSelected: languageState.locale.languageCode == 'ar',
+                  onTap: () => languageState.setLanguage('ar'),
+                ),
+                
+                const Spacer(),
+                ElevatedButton(
+                  onPressed: () {
+                    if (isFromSettings) {
+                      Navigator.of(context).pop();
+                    } else {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+                      );
+                    }
+                  },
+                  child: Text(
+                    isFromSettings
+                        ? localizations.translate('save_and_return')
+                        : localizations.translate('continue_button'),
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

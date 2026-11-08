@@ -1,6 +1,7 @@
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, exit;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,6 +16,15 @@ import '../library/saved_library_screen.dart';
 import '../profile/profile_screen.dart';
 import '../profile/paywall_screen.dart';
 
+class NavigationController {
+  static void Function(int)? onTabChange;
+  static void selectTab(int index) {
+    if (onTabChange != null) {
+      onTabChange!(index);
+    }
+  }
+}
+
 class MainNavigation extends StatefulWidget {
   const MainNavigation({Key? key}) : super(key: key);
 
@@ -27,7 +37,6 @@ class _MainNavigationState extends State<MainNavigation> {
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const ExploreScreen(),
     const SearchScreen(),
     const SavedLibraryScreen(),
     const ProfileScreen(),
@@ -36,9 +45,22 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   void initState() {
     super.initState();
+    NavigationController.onTabChange = (index) {
+      if (mounted) {
+        setState(() {
+          _currentIndex = index;
+        });
+      }
+    };
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkVersionAndExpiry();
     });
+  }
+
+  @override
+  void dispose() {
+    NavigationController.onTabChange = null;
+    super.dispose();
   }
 
   void _checkVersionAndExpiry() async {
@@ -63,6 +85,7 @@ class _MainNavigationState extends State<MainNavigation> {
   Future<void> _performVersionCheck() async {
     const String currentVersion = '2.0';
     try {
+      if (Firebase.apps.isEmpty) return;
       final doc = await FirebaseFirestore.instance.collection('settings').doc('global').get();
       if (!doc.exists) return;
       
@@ -210,25 +233,44 @@ class _MainNavigationState extends State<MainNavigation> {
               ),
               content: Text(localizations.translate('exit_desc')),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: Text(localizations.translate('cancel_btn')),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: Text(localizations.translate('exit_btn')),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        child: Text(
+                          localizations.translate('cancel_btn'),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.error,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                        child: Text(
+                          localizations.translate('exit_btn'),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             );
           },
         );
         if (shouldExit == true) {
-          await SystemNavigator.pop();
+          SystemNavigator.pop();
         }
       },
       child: Scaffold(
@@ -243,7 +285,7 @@ class _MainNavigationState extends State<MainNavigation> {
             setState(() {
               _currentIndex = index;
             });
-            const screens = ['Home Dashboard', 'Explore & Playlists', 'Search Books', 'My Library', 'Profile & Settings'];
+            const screens = ['Home Dashboard', 'Search & Browse', 'My Library', 'Profile & Settings'];
             if (index >= 0 && index < screens.length) {
               AppLocator.auth.updatePresence(screen: screens[index], activityType: 'browsing');
             }
@@ -253,11 +295,6 @@ class _MainNavigationState extends State<MainNavigation> {
               icon: const Icon(Icons.home_outlined),
               activeIcon: const Icon(Icons.home),
               label: localizations.translate('home'),
-            ),
-            BottomNavigationBarItem(
-              icon: const Icon(Icons.explore_outlined),
-              activeIcon: const Icon(Icons.explore),
-              label: localizations.translate('explore'),
             ),
             BottomNavigationBarItem(
               icon: const Icon(Icons.search_outlined),

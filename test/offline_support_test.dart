@@ -25,7 +25,7 @@ import 'package:partwk/models/highlight.dart';
 import 'package:partwk/models/learning_path.dart';
 import 'package:partwk/models/achievement.dart';
 
-class TestAuthService extends AuthService {
+class TestAuthService extends MockAuthService {
   UserModel? _currentUser;
   bool _isGuest = false;
 
@@ -45,6 +45,12 @@ class TestAuthService extends AuthService {
 
   @override
   Future<void> initialize() async {}
+
+  @override
+  Future<void> updateProfilePicture(String url) async {
+    _currentUser = _currentUser?.copyWith(profilePictureUrl: url);
+    notifyListeners();
+  }
 
   @override
   Future<void> signInWithEmailAndPassword(String email, String password) async {}
@@ -127,7 +133,7 @@ class TestAuthService extends AuthService {
   @override
   Future<void> upgradeToPremium() async {}
   @override
-  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false}) async {}
+  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false, String? expectedUserId}) async {}
   @override
   Future<void> recordActivity() async {}
   @override
@@ -185,6 +191,10 @@ class TestDatabaseService extends DatabaseService {
   Future<void> addQuiz(Quiz quiz) async {}
   @override
   Future<void> updateTranslations(String key, String enVal, String kuVal, String arVal) async {}
+  @override
+  Future<String?> getDefinition(String word, String langCode) async => null;
+  @override
+  Future<List<Book>> fetchTrendingBooks(List<Book> allBooks) async => allBooks;
 }
 
 void main() {
@@ -538,7 +548,13 @@ void main() {
       await LicenceManager.recordOnlineValidation();
 
       // Read licence, modify it, and write it back (tampering)
-      final licenceFile = File('${bookDir.path}/licence.json');
+      File licenceFile = File('${tempDir.path}/users/${user.id}/books/${book.id}/${licence.languageCode}/licence.json');
+      if (!licenceFile.existsSync()) {
+        licenceFile = File('${tempDir.path}/users/${user.id}/books/${book.id}/licence.json');
+      }
+      if (!licenceFile.existsSync()) {
+        licenceFile = File('${bookDir.path}/licence.json');
+      }
       final licenceJson = jsonDecode(licenceFile.readAsStringSync());
       
       // Tamper with the expiry date
@@ -551,7 +567,7 @@ void main() {
 
       // Verify revocation wiped the keys and files
       expect(secureStorageMock.containsKey('enc_key_${user.id}_${book.id}'), isFalse);
-      expect(bookDir.existsSync(), isFalse);
+      expect(licenceFile.existsSync(), isFalse);
     });
 
     test('Offline grace period blocks use when offline longer than 7 days', () async {

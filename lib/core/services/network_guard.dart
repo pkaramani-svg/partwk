@@ -12,6 +12,15 @@ class NetworkGuard {
     if (mockConnectionStatus != null) {
       return mockConnectionStatus!;
     }
+    if (const bool.fromEnvironment('USE_FIREBASE_EMULATORS')) {
+      try {
+        const host = String.fromEnvironment('FIREBASE_EMULATOR_HOST', defaultValue: '10.0.2.2');
+        const port = int.fromEnvironment('FIREBASE_FIRESTORE_EMULATOR_PORT', defaultValue: 18080);
+        final socket = await Socket.connect(host, port, timeout: const Duration(seconds: 2));
+        socket.destroy();
+        return true;
+      } catch (_) { return false; }
+    }
     try {
       final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
@@ -115,7 +124,7 @@ class NetworkGuard {
     final localizations = AppLocalizations.of(context)!;
     final lang = localizations.locale.languageCode;
     
-    final msg = lang == 'ku' ? 'ئەم پەڕتووکە دانەگیراوە بۆ خوێندنەوەی بێ هێڵ. تکایە پەیوەست بە بە ئینتەرنێتەوە بۆ بینینی.' :
+    final msg = lang == 'ku' ? 'ئەم پەرتووکە دانەگیراوە بۆ خوێندنەوەی بێ هێڵ. تکایە پەیوەست بە بە ئینتەرنێتەوە بۆ بینینی.' :
                 lang == 'ar' ? 'هذا الكتاب غير محمل للقراءة بدون اتصال. يرجى الاتصال بالإنترنت لعرضه.' :
                 'This book is not downloaded for offline reading. Please connect to the internet to view it.';
     

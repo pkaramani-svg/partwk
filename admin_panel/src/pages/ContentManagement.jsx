@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Plus, Edit2, Trash2, X, UploadCloud, Music, FileText, Sparkles, ArrowUp, ArrowDown } from 'lucide-react';
-import { fetchBooks, addBook, uploadFile, updateBook, deleteBook, addQuizData, addFlashcardsData, checkAiDataExists } from '../services/api';
-import { generateStudyMaterials } from '../services/ai_service';
+import { fetchBooks, getBookForEditing, setBookLanguageVisibility, addBook, uploadFile, updateBook, deleteBook, addQuizData, addFlashcardsData, checkAiDataExists, publishBooksBatch } from '../services/api';
 import './UsersManagement.css'; // Reuse table styles
 
 const categoryNames = {
@@ -14,7 +13,6 @@ const categoryNames = {
   'cat-money-investing': 'Money & Investing',
   'cat-communication': 'Communication',
   'cat-health-wellness': 'Health & Wellness',
-  'cat-entrepreneurship': 'Entrepreneurship',
   'cat-technology-innovation': 'Technology & Innovation',
   'cat-biography-memoir': 'Biography & Memoir',
   'cat-modern-wisdom': 'Modern Wisdom',
@@ -28,9 +26,12 @@ const ContentManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingBookId, setEditingBookId] = useState(null);
+  const [editingBookData, setEditingBookData] = useState(null);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [aiDataExists, setAiDataExists] = useState(false);
   const [pendingAiData, setPendingAiData] = useState({});
+  const [isPublished, setIsPublished] = useState(false);
+  const [selectedBookIds, setSelectedBookIds] = useState([]);
 
   // Sorting State
   const [sortField, setSortField] = useState('title');
@@ -52,8 +53,12 @@ const ContentManagement = () => {
     const titleMatch = Object.values(book.title || {}).some(val => (val || '').toLowerCase().includes(term));
     const authorMatch = Object.values(book.author || {}).some(val => (val || '').toLowerCase().includes(term));
     const descMatch = Object.values(book.description || {}).some(val => (val || '').toLowerCase().includes(term));
+    const bookCats = Array.isArray(book.categories) && book.categories.length > 0
+      ? book.categories
+      : (Array.isArray(book.categoryIds) ? book.categoryIds : (book.category ? [book.category] : []));
+    const catMatch = bookCats.some(catId => (categoryNames[catId] || catId).toLowerCase().includes(term));
     
-    return titleMatch || authorMatch || descMatch;
+    return titleMatch || authorMatch || descMatch || catMatch;
   });
 
   const sortedBooks = [...filteredBooks].sort((a, b) => {
@@ -65,8 +70,14 @@ const ContentManagement = () => {
       aVal = (a.title?.en || a.title?.ku || a.title?.ar || '').toLowerCase();
       bVal = (b.title?.en || b.title?.ku || b.title?.ar || '').toLowerCase();
     } else if (sortField === 'category') {
-      const aCat = a.categoryIds ? a.categoryIds.map(id => categoryNames[id] || id).join(', ') : '';
-      const bCat = b.categoryIds ? b.categoryIds.map(id => categoryNames[id] || id).join(', ') : '';
+      const getCatNames = (item) => {
+        const cats = Array.isArray(item.categories) && item.categories.length > 0
+          ? item.categories
+          : (Array.isArray(item.categoryIds) ? item.categoryIds : (item.category ? [item.category] : []));
+        return cats.map(id => categoryNames[id] || id).join(', ');
+      };
+      const aCat = getCatNames(a);
+      const bCat = getCatNames(b);
       aVal = aCat.toLowerCase();
       bVal = bCat.toLowerCase();
     } else if (sortField === 'languages') {
@@ -84,6 +95,9 @@ const ContentManagement = () => {
     } else if (sortField === 'dateEdited') {
       aVal = a.updatedAt || '';
       bVal = b.updatedAt || '';
+    } else if (sortField === 'isPublished') {
+      aVal = a.isPublished !== false ? 1 : 0;
+      bVal = b.isPublished !== false ? 1 : 0;
     }
     
     if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
@@ -96,7 +110,8 @@ const ContentManagement = () => {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [description, setDescription] = useState('');
-  const [categoryId, setCategoryId] = useState('cat-productivity');
+  const [selectedCategories, setSelectedCategories] = useState(['cat-productivity']);
+  const categoryId = selectedCategories[0] || 'cat-productivity';
   const [isPremium, setIsPremium] = useState(false);
   const [isDownloadable, setIsDownloadable] = useState(true);
   
@@ -121,6 +136,25 @@ const ContentManagement = () => {
   useEffect(() => {
     loadBooks();
   }, []);
+
+  const handleBatchPublish = async (publishState) => {
+    if (selectedBookIds.length === 0) return;
+    const actionText = publishState ? 'publish' : 'unpublish (set to draft)';
+    if (window.confirm(`Are you sure you want to ${actionText} the ${selectedBookIds.length} selected book(s)?`)) {
+      try {
+        setIsSubmitting(true);
+        await publishBooksBatch(selectedBookIds, publishState);
+        setSelectedBookIds([]);
+        await loadBooks();
+        alert(`Successfully updated status for selected books.`);
+      } catch (error) {
+        console.error("Batch publish error:", error);
+        alert(`Failed to update books: ${error.message || "Unknown error"}`);
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+  };
 
   const checkAiStatus = async (bookId, selectedLang) => {
     if (!bookId) {
@@ -197,13 +231,15 @@ const ContentManagement = () => {
     setTitle('');
     setAuthor('');
     setDescription('');
-    setCategoryId('cat-productivity');
+    setSelectedCategories(['cat-productivity']);
     setIsPremium(false);
     setIsDownloadable(true);
+    setIsPublished(false);
     setCoverFile(null);
     setExistingCoverUrl(null);
     setChapters([{ title: 'Intro', content: '', audioFile: null, duration: 0 }]);
     setEditingBookId(null);
+    setEditingBookData(null);
     setPendingAiData({});
   };
 
@@ -211,7 +247,7 @@ const ContentManagement = () => {
     setLang(selectedLang);
     
     if (editingBookId) {
-      const currentBook = books.find(b => b.id === editingBookId);
+      const currentBook = editingBookData;
       if (currentBook) {
         setTitle(currentBook.title?.[selectedLang] || '');
         setAuthor(currentBook.author?.[selectedLang] || '');
@@ -243,15 +279,25 @@ const ContentManagement = () => {
     }
   };
 
-  const openEditModal = (book) => {
+  const openEditModal = async (catalogueBook) => {
+    let book;
+    try { book = await getBookForEditing(catalogueBook.id); }
+    catch (error) { alert(`Failed to load book for editing: ${error.message}`); return; }
+    setEditingBookData(book);
     const initialLang = Object.keys(book.title || {})[0] || 'en';
     setLang(initialLang);
     setTitle(book.title?.[initialLang] || '');
     setAuthor(book.author?.[initialLang] || '');
     setDescription(book.description?.[initialLang] || '');
-    setCategoryId(book.categoryIds ? book.categoryIds[0] : 'cat-productivity');
+    const bookCategories = Array.isArray(book.categories) && book.categories.length > 0
+      ? book.categories
+      : (Array.isArray(book.categoryIds) && book.categoryIds.length > 0
+        ? book.categoryIds
+        : (book.category ? [book.category] : ['cat-productivity']));
+    setSelectedCategories(bookCategories);
     setIsPremium(book.isPremium || false);
     setIsDownloadable(book.isDownloadable !== false);
+    setIsPublished(book.isPublished !== false);
     
     setCoverFile(null);
     
@@ -302,7 +348,7 @@ const ContentManagement = () => {
         ? currentHidden.filter(l => l !== langCode)
         : [...currentHidden, langCode];
       
-      await updateBook(book.id, { hiddenLanguages: updatedHidden });
+      await setBookLanguageVisibility(book.id, langCode, !updatedHidden.includes(langCode));
       
       // Update local state
       setBooks(prevBooks => prevBooks.map(b => 
@@ -359,11 +405,14 @@ const ContentManagement = () => {
           [`title.${lang}`]: title,
           [`author.${lang}`]: author,
           [`description.${lang}`]: description,
-          categoryIds: [categoryId],
+          categories: selectedCategories,
+          categoryIds: selectedCategories,
+          category: selectedCategories[0] || 'cat-productivity',
           duration: totalDuration, 
           [`chapterSummaries.${lang}`]: processedChapters,
           isPremium: isPremium,
           isDownloadable: isDownloadable,
+          isPublished: isPublished,
           updatedAt: new Date().toISOString()
         };
         
@@ -387,11 +436,14 @@ const ContentManagement = () => {
           title: { [lang]: title },
           author: { [lang]: author },
           description: { [lang]: description },
-          categoryIds: [categoryId],
+          categories: selectedCategories,
+          categoryIds: selectedCategories,
+          category: selectedCategories[0] || 'cat-productivity',
           duration: totalDuration, 
           chapterSummaries: { [lang]: processedChapters },
           isPremium: isPremium,
           isDownloadable: isDownloadable,
+          isPublished: isPublished,
           updatedAt: new Date().toISOString()
         };
         
@@ -401,7 +453,7 @@ const ContentManagement = () => {
       }
       
       if (editingBookId) {
-        await updateBook(editingBookId, bookData);
+        await updateBook(editingBookId, bookData, lang);
         
         // Save pending AI data for edited book
         for (const [dataLang, aiData] of Object.entries(pendingAiData)) {
@@ -418,7 +470,7 @@ const ContentManagement = () => {
         bookData.keyQuotes = {};
         bookData.actionPoints = {};
         bookData.createdAt = new Date().toISOString();
-        const newBookId = await addBook(bookData);
+        const newBookId = await addBook(bookData, lang);
         
         // Save pending AI data
         for (const [dataLang, aiData] of Object.entries(pendingAiData)) {
@@ -440,31 +492,7 @@ const ContentManagement = () => {
   };
 
   const handleGenerateAi = async () => {
-    if (!description && (!chapters[0] || !chapters[0].content)) {
-      alert("Please provide at least a Short Description or Chapter Content for the AI to analyze.");
-      return;
-    }
-    
-    // Combine text for AI
-    const textToAnalyze = description + "\n\n" + chapters.map(c => c.content).join("\n\n");
-    
-    if (textToAnalyze.length < 50) {
-      alert("The provided text is too short for AI generation. Please provide a detailed summary.");
-      return;
-    }
-
-    setIsGeneratingAi(true);
-    try {
-      const aiData = await generateStudyMaterials(textToAnalyze, lang);
-      alert(`AI successfully generated ${aiData.flashcards.length} Flashcards and ${aiData.quizzes.length} Quiz Questions in ${lang.toUpperCase()}! These will be saved automatically when you 'Save Book & Playlist'.`);
-      
-      setPendingAiData(prev => ({ ...prev, [lang]: aiData }));
-      setAiDataExists(true);
-    } catch (error) {
-      alert(error.message);
-    } finally {
-      setIsGeneratingAi(false);
-    }
+    alert("Study materials (quizzes and flashcards) are generated automatically via the backend Gemini content pipeline when processing books.");
   };
 
   return (
@@ -487,10 +515,59 @@ const ContentManagement = () => {
         </div>
       </div>
 
+      {selectedBookIds.length > 0 && (
+        <div className="glass-panel" style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 20px',
+          marginBottom: '15px',
+          background: 'rgba(30, 41, 59, 0.7)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '8px',
+          boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
+          backdropFilter: 'blur(10px)'
+        }}>
+          <div style={{ color: '#fff', fontWeight: 'bold' }}>
+            {selectedBookIds.length} book{selectedBookIds.length > 1 ? 's' : ''} selected
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button 
+              className="btn-primary" 
+              onClick={() => handleBatchPublish(true)}
+              style={{ background: '#10B981', border: 'none', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              Publish Selected
+            </button>
+            <button 
+              className="btn-primary" 
+              onClick={() => handleBatchPublish(false)}
+              style={{ background: '#64748B', border: 'none', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              Unpublish Selected
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="glass-panel table-container">
         <table className="data-table">
           <thead>
             <tr>
+              <th style={{ width: '40px', textAlign: 'center' }}>
+                <input 
+                  type="checkbox" 
+                  checked={sortedBooks.length > 0 && selectedBookIds.length === sortedBooks.length}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedBookIds(sortedBooks.map(b => b.id));
+                    } else {
+                      setSelectedBookIds([]);
+                    }
+                  }}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+              </th>
               <th onClick={() => handleSort('title')} className="sortable">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   Title
@@ -501,6 +578,12 @@ const ContentManagement = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   Category
                   {sortField === 'category' && (sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
+                </div>
+              </th>
+              <th onClick={() => handleSort('isPublished')} className="sortable">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  Status
+                  {sortField === 'isPublished' && (sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                 </div>
               </th>
               <th onClick={() => handleSort('languages')} className="sortable">
@@ -540,15 +623,53 @@ const ContentManagement = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="10" style={{textAlign: 'center', padding: '20px'}}>Loading books...</td></tr>
+              <tr><td colSpan="12" style={{textAlign: 'center', padding: '20px'}}>Loading books...</td></tr>
             ) : sortedBooks.length === 0 ? (
-              <tr><td colSpan="10" style={{textAlign: 'center', padding: '20px'}}>No books found matching search criteria. Click "Add New Book" to get started!</td></tr>
+              <tr><td colSpan="12" style={{textAlign: 'center', padding: '20px'}}>No books found matching search criteria. Click "Add New Book" to get started!</td></tr>
             ) : sortedBooks.map((book) => (
               <tr key={book.id}>
+                <td style={{ textAlign: 'center' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={selectedBookIds.includes(book.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedBookIds(prev => [...prev, book.id]);
+                      } else {
+                        setSelectedBookIds(prev => prev.filter(id => id !== book.id));
+                      }
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                </td>
                 <td>
                   <span className="font-medium" dir="auto">{book.title?.en || book.title?.ku || book.title?.ar || 'Untitled'}</span>
                 </td>
-                <td className="text-muted">{book.categoryIds ? book.categoryIds.map(id => categoryNames[id] || id).join(', ') : 'Uncategorized'}</td>
+                <td className="text-muted">
+                  {(() => {
+                    const cats = Array.isArray(book.categories) && book.categories.length > 0
+                      ? book.categories
+                      : (Array.isArray(book.categoryIds) && book.categoryIds.length > 0
+                        ? book.categoryIds
+                        : (book.category ? [book.category] : []));
+                    return cats.length > 0
+                      ? cats.map(id => categoryNames[id] || id).join(', ')
+                      : 'Uncategorized';
+                  })()}
+                </td>
+                <td>
+                  <span className="badge-plan" style={{
+                    background: book.isPublished !== false ? '#10B981' : '#64748B',
+                    color: '#fff',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase'
+                  }}>
+                    {book.isPublished !== false ? 'Published' : 'Draft'}
+                  </span>
+                </td>
                 <td>
                   <span className="badge-plan free">{Object.keys(book.title || {}).join(', ').toUpperCase() || 'EN'}</span>
                 </td>
@@ -629,25 +750,62 @@ const ContentManagement = () => {
                     <option value="ar">Arabic (AR)</option>
                   </select>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#94A3B8' }}>Category</label>
-                  <select className="input-field" value={categoryId} onChange={e => setCategoryId(e.target.value)} style={{ width: '100%' }}>
-                    <option value="cat-productivity">Productivity</option>
-                    <option value="cat-psychology">Psychology</option>
-                    <option value="cat-personal-development">Personal Development</option>
-                    <option value="cat-business">Business</option>
-                    <option value="cat-leadership">Leadership</option>
-                    <option value="cat-money-investing">Money & Investing</option>
-                    <option value="cat-communication">Communication</option>
-                    <option value="cat-health-wellness">Health & Wellness</option>
-                    <option value="cat-entrepreneurship">Entrepreneurship</option>
-                    <option value="cat-technology-innovation">Technology & Innovation</option>
-                    <option value="cat-biography-memoir">Biography & Memoir</option>
-                    <option value="cat-modern-wisdom">Modern Wisdom</option>
-                    <option value="cat-history-big-ideas">History & Big Ideas</option>
-                  </select>
+                <div style={{ flex: 1, minWidth: '320px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#94A3B8' }}>
+                    Categories ({selectedCategories.length} selected)
+                  </label>
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '6px',
+                    padding: '8px',
+                    background: '#1E293B',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    maxHeight: '140px',
+                    overflowY: 'auto'
+                  }}>
+                    {Object.entries(categoryNames).map(([id, name]) => {
+                      const isSelected = selectedCategories.includes(id);
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              if (selectedCategories.length > 1) {
+                                setSelectedCategories(selectedCategories.filter(c => c !== id));
+                              }
+                            } else {
+                              setSelectedCategories([...selectedCategories, id]);
+                            }
+                          }}
+                          style={{
+                            background: isSelected ? '#3B82F6' : '#334155',
+                            color: '#FFFFFF',
+                            border: isSelected ? '1px solid #60A5FA' : '1px solid #475569',
+                            borderRadius: '16px',
+                            padding: '4px 10px',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <span>{name}</span>
+                          {isSelected && <span style={{ fontSize: '10px', fontWeight: 'bold' }}>✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input type="checkbox" id="publishedToggle" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} style={{ width: '20px', height: '20px' }} />
+                    <label htmlFor="publishedToggle" style={{ fontSize: '16px', fontWeight: 'bold', color: isPublished ? '#10B981' : '#fff' }}>Published on App</label>
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <input type="checkbox" id="premiumToggle" checked={isPremium} onChange={(e) => setIsPremium(e.target.checked)} style={{ width: '20px', height: '20px' }} />
                     <label htmlFor="premiumToggle" style={{ fontSize: '16px', fontWeight: 'bold', color: isPremium ? '#F59E0B' : '#fff' }}>Premium Content</label>

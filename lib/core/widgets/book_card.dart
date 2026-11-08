@@ -7,19 +7,25 @@ class BookCard extends StatelessWidget {
   final Book book;
   final VoidCallback onTap;
   final double progress; // 0.0 to 1.0
+  final Widget? trailing;
+  final Widget? badge;
+  final String? displayLanguageCode;
 
   const BookCard({
     Key? key,
     required this.book,
     required this.onTap,
     this.progress = 0.0,
+    this.trailing,
+    this.badge,
+    this.displayLanguageCode,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final locale = AppLocalizations.of(context);
-    final langCode = locale?.locale.languageCode ?? 'en';
+    final langCode = displayLanguageCode ?? locale?.locale.languageCode ?? 'en';
 
     return GestureDetector(
       onTap: onTap,
@@ -47,13 +53,15 @@ class BookCard extends StatelessWidget {
                 Hero(
                   tag: 'book-cover-${book.id}',
                   child: SizedBox(
-                    width: 100,
+                    width: 90,
                     child: ClipRRect(
-                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+                      borderRadius: const BorderRadiusDirectional.horizontal(
+                        start: Radius.circular(16),
+                      ).resolve(Directionality.of(context)),
                       child: DownloadService.getBookCoverWidget(
                         book,
                         langCode: langCode,
-                        width: 100,
+                        width: 90,
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -62,59 +70,71 @@ class BookCard extends StatelessWidget {
                 // Content
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          alignment: WrapAlignment.spaceBetween,
                           children: [
-                            // Premium Badge
-                            if (book.isPremium)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.tertiary.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  'PREMIUM',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.tertiary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
-                                    letterSpacing: 1.0,
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (badge != null) badge!,
+                                // Premium Badge
+                                if (book.isPremium)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.tertiary.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'PREMIUM',
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: theme.colorScheme.tertiary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 9,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.secondary.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'FREE',
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: theme.colorScheme.secondary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 9,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              )
-                            else
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.secondary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  'FREE',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.secondary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
+                              ],
+                            ),
                             
                             // Audio duration
                             Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   book.getDurationForLanguage(langCode) > 0
                                       ? Icons.headset
                                       : Icons.article,
-                                  size: 14,
+                                  size: 13,
                                   color: theme.textTheme.bodyMedium?.color,
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: 3),
                                 Text(
                                   (() {
                                     final secs = book.getDurationForLanguage(langCode);
@@ -125,13 +145,13 @@ class BookCard extends StatelessWidget {
                                     }
                                     return '${(secs / 60).round()}m';
                                   })(),
-                                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
+                                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 11),
                                 ),
                               ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         // Title
                         Text(
                           book.getTitle(langCode),
@@ -142,16 +162,18 @@ class BookCard extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         // Author
                         Text(
                           book.getAuthor(langCode),
-                          style: theme.textTheme.bodyMedium,
+                          style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const Spacer(),
                         // Reading progress bar
                         if (progress > 0.0) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Row(
                             children: [
                               Expanded(
@@ -197,6 +219,11 @@ class BookCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (trailing != null)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: Center(child: trailing!),
+                  ),
               ],
             ),
           ),

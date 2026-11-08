@@ -36,6 +36,74 @@ except ImportError:
 # ==============================================================================
 FIREBASE_PROJECT_ID = "partwk-bd4ec"
 FIREBASE_BUCKET = "partwk-bd4ec.firebasestorage.app"
+FIREBASE_API_KEY = "AIzaSyBmUjUw-ZZmBEU9PppHw27xbItNk-tBZT0"
+
+_cached_auth_token = None
+_cached_token_time = 0
+
+def get_auth_token() -> str:
+    global _cached_auth_token, _cached_token_time
+    import time
+    if _cached_auth_token and (time.time() - _cached_token_time < 3000):
+        return _cached_auth_token
+        
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
+    email = os.getenv("PIPELINE_ADMIN_EMAIL", "pipeline_admin@partwk.com")
+    password = os.getenv("PIPELINE_ADMIN_PASSWORD")
+    if not password:
+        raise ValueError("PIPELINE_ADMIN_PASSWORD environment variable is required for pipeline authentication.")
+    
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True
+    }
+    
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode())
+            _cached_auth_token = data.get("idToken")
+            _cached_token_time = time.time()
+            return _cached_auth_token
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        err_data = json.loads(body)
+        err_message = err_data.get("error", {}).get("message", "")
+        if "INVALID_LOGIN_CREDENTIALS" in err_message or "EMAIL_NOT_FOUND" in err_message:
+            print("    [!] Login failed, attempting pipeline admin auto-signup...")
+            try:
+                signup_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}"
+                sreq = urllib.request.Request(
+                    signup_url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(sreq, timeout=30) as sresp:
+                    sdata = json.loads(sresp.read().decode())
+                    _cached_auth_token = sdata.get("idToken")
+                    _cached_token_time = time.time()
+                    return _cached_auth_token
+            except urllib.error.HTTPError as se:
+                sbody = se.read().decode()
+                serr_data = json.loads(sbody)
+                serr_message = serr_data.get("error", {}).get("message", "")
+                if "EMAIL_EXISTS" in serr_message:
+                    print("    [!] Error: The pipeline admin user exists, but the password provided is incorrect.")
+                else:
+                    print("    [!] Signup failed:", sbody)
+                raise se
+        else:
+            print("    [!] Authentication failed:", body)
+            raise e
+
 
 
 def load_env_file(filepath: str = ".env"):
@@ -69,7 +137,7 @@ class GeminiClientManager:
             sys.exit(1)
             
         self.current_idx = 0
-        self.client = genai.Client(api_key=self.keys[0], http_options=types.HttpOptions(timeout=60_000))
+        self.client = genai.Client(api_key=self.keys[0], http_options=types.HttpOptions(timeout=180_000))
         print(f"[✓] Loaded {len(self.keys)} Gemini API Key(s). Starting with Key 1.")
 
     def rotate_key(self) -> bool:
@@ -81,7 +149,7 @@ class GeminiClientManager:
         new_key = self.keys[self.current_idx]
         masked = new_key[:8] + "..." + new_key[-8:] if len(new_key) > 16 else "..."
         print(f"\n[!] Rate limit/Quota exceeded! Rotating to API Key {self.current_idx + 1}/{len(self.keys)} ({masked})...")
-        self.client = genai.Client(api_key=new_key, http_options=types.HttpOptions(timeout=60_000))
+        self.client = genai.Client(api_key=new_key, http_options=types.HttpOptions(timeout=180_000))
         return True
 
     def generate_content(self, model: str, contents: Any, config: Any = None) -> Any:
@@ -156,8 +224,14 @@ def from_firestore_doc(doc_data: Dict[str, Any]) -> Dict[str, Any]:
 # ==============================================================================
 def get_firestore_document(collection: str, doc_id: str) -> Any:
     """Fetches a document from Firestore REST API. Returns decoded dict or None."""
-    url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/{collection}/{doc_id}"
-    req = urllib.request.Request(url, method="GET")
+    token = get_auth_token()
+    encoded_doc_id = urllib.parse.quote(doc_id)
+    url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/{collection}/{encoded_doc_id}"
+    req = urllib.request.Request(
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+        method="GET"
+    )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             doc_data = json.loads(resp.read().decode())
@@ -169,21 +243,31 @@ def get_firestore_document(collection: str, doc_id: str) -> Any:
 
 
 def set_firestore_document(collection: str, doc_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-    """Creates or updates a document in Firestore REST API."""
-    url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/{collection}/{doc_id}"
+    """Creates or updates a document in Firestore REST API cleanly merging fields."""
+    token = get_auth_token()
+    mask_params = "&".join([f"updateMask.fieldPaths={k}" for k in data.keys()])
+    encoded_doc_id = urllib.parse.quote(doc_id)
+    url = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents/{collection}/{encoded_doc_id}"
+    if mask_params:
+        url += f"?{mask_params}"
     payload = {"fields": {k: to_firestore_value(v) for k, v in data.items()}}
     req = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        },
         method="PATCH"
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode())
 
 
+
 def upload_file_to_storage(local_path: str, remote_path: str, mime_type: str) -> str:
     """Uploads a file to Firebase Storage via REST API and returns its download URL."""
+    token = get_auth_token()
     encoded_name = urllib.parse.quote(remote_path, safe='')
     url = f"https://firebasestorage.googleapis.com/v0/b/{FIREBASE_BUCKET}/o?uploadType=media&name={encoded_name}"
     
@@ -193,7 +277,10 @@ def upload_file_to_storage(local_path: str, remote_path: str, mime_type: str) ->
     req = urllib.request.Request(
         url,
         data=body,
-        headers={"Content-Type": mime_type},
+        headers={
+            "Content-Type": mime_type,
+            "Authorization": f"Bearer {token}"
+        },
         method="POST"
     )
 
@@ -497,17 +584,17 @@ def main():
             print("[!] Author name is required to ensure the correct book is summarized.")
             auth = input(f"Enter author name for '{b}': ").strip()
         book_authors[b] = auth
-
     lang_input = input("Select Language (en/ar/ku/all) [default: en]: ").strip().lower()
-    if lang_input in ["all", "en,ar,ku", "en,ku,ar", "ar,en,ku", "ar,ku,en", "ku,en,ar", "ku,ar,en"]:
+    raw_langs = re.split(r'[,; ]+', lang_input)
+    langs = []
+    for l in raw_langs:
+        if l in ["en", "ar", "ku"] and l not in langs:
+            langs.append(l)
+    if "all" in lang_input:
         langs = ["en", "ar", "ku"]
-    elif lang_input == "both" or lang_input in ["en,ar", "ar,en"]:
+    elif "both" in lang_input:
         langs = ["en", "ar"]
-    elif lang_input == "ar":
-        langs = ["ar"]
-    elif lang_input == "ku":
-        langs = ["ku"]
-    else:
+    if not langs:
         langs = ["en"]
 
     # Category list matching ContentManagement.jsx
@@ -520,7 +607,6 @@ def main():
         ("cat-money-investing", "Money & Investing"),
         ("cat-communication", "Communication"),
         ("cat-health-wellness", "Health & Wellness"),
-        ("cat-entrepreneurship", "Entrepreneurship"),
         ("cat-technology-innovation", "Technology & Innovation"),
         ("cat-biography-memoir", "Biography & Memoir"),
         ("cat-modern-wisdom", "Modern Wisdom"),
@@ -530,9 +616,9 @@ def main():
     print("\nSelect Category:")
     for idx, (cat_id, name) in enumerate(categories, 1):
         print(f"  [{idx:2d}] {name}")
-    print("  [14] Auto-detect (Let AI decide based on the book's content)")
+    print("  [13] Auto-detect (Let AI decide based on the book's content)")
     
-    cat_selection = input("Choose category number [default: 14]: ").strip()
+    cat_selection = input("Choose category number [default: 13]: ").strip()
     selected_category_id = None
     if cat_selection.isdigit():
         sel_idx = int(cat_selection) - 1
@@ -596,7 +682,11 @@ def main():
 
         # Fetch existing document early to reuse colors and merge cleanly
         doc_id = slugify(book_title)
-        existing_doc = get_firestore_document("books", doc_id)
+        # Regeneration is always staged for manual review; never write the
+        # generated full text into a public book, even if it already exists.
+        existing_doc = get_firestore_document("books_draft", doc_id)
+        if not existing_doc:
+            existing_doc = get_firestore_document("books", doc_id)
         existing_cover_colors = ""
         existing_cover_color_hex_1 = ""
         existing_cover_color_hex_2 = ""
@@ -617,7 +707,7 @@ def main():
             f"Analyze the book '{book_title}' {forced_author_clause}to determine its genre, author, visual colors, and matching narrator config. "
             "You must select one of the following category IDs that matches best: "
             "'cat-productivity', 'cat-psychology', 'cat-personal-development', 'cat-business', 'cat-leadership', "
-            "'cat-money-investing', 'cat-communication', 'cat-health-wellness', 'cat-entrepreneurship', "
+            "'cat-money-investing', 'cat-communication', 'cat-health-wellness', "
             "'cat-technology-innovation', 'cat-biography-memoir', 'cat-modern-wisdom', 'cat-history-big-ideas'.\n"
             "Also select one of the following 12 prebuilt voices that best fits the book's content, genre, tone, and audience:\n"
             "  - Male Voices: 'Charon' (Deep, steady, professional), 'Puck' (Upbeat, energetic), 'Zephyr' (Bright, warm, engaging), 'Fenrir' (Excited, dynamic), 'Orus' (Firm, confident), 'Umbriel' (Easy-going, relaxed).\n"
@@ -637,7 +727,7 @@ def main():
         analysis_data = None
         max_retries = 3
         retry_delay = 2
-        models_to_try = ["gemini-2.5-flash", "gemini-2.5-pro"]
+        models_to_try = ["gemini-flash-latest", "gemini-pro-latest"]
 
         for attempt in range(1, max_retries + 1):
             model_to_use = models_to_try[(attempt - 1) % len(models_to_try)]
@@ -747,7 +837,7 @@ def main():
             "8. LANGUAGE QUALITY:\n"
             f"   - For English: Premium, clear, conversational, and native-level audiobook narration. Ensure natural rhythm and voice inflections.\n"
             f"   - For Arabic: Native Modern Standard Arabic (Fusha), natural, fluent, adapting ideas naturally instead of word-for-word translations. Ensure sentences are clear and flow like a classic story.\n"
-            f"   - For Kurdish: The summary must be a unique, original, and complete educational summary written from scratch as if it were authored by a highly fluent, native local book writer from Sulaymaniyah (Slemani dialect/phrasing). Do not perform a literal or word-for-word translation of the English/Arabic version. It must be highly engaging, natural, and use rich Kurdish vocabulary and correct grammar/phrasing that covers the full depth and learning value of the book.\n"
+            f"   - For Kurdish: The summary must be a unique, original, and complete educational summary written from scratch as if it were authored by a highly fluent, native local book writer from Sulaymaniyah (Slemani dialect/phrasing). Do not perform a literal or word-for-word translation of the English/Arabic version. It must be highly engaging, natural, and use rich Kurdish vocabulary and correct grammar/phrasing that covers the full depth and learning value of the book. You MUST strictly avoid the misspelled words 'کورتەکراوە' (or 'کورتەکراوەی') and 'پەڕتووک' / 'پەڕتووکی'; instead, always use the correct spelling 'کورتکراوە' (or 'کورتکراوەی') and 'پەرتووک' / 'پەرتووکی'.\n"
             "9. COPYRIGHT COMPLIANCE: Never copy passages or direct quotes from the original book. Create entirely original explanations, focusing on transforming and teaching concepts.\n"
             "10. LENGTH & PARAGRAPH STRUCTURE: To optimize readability and flow, write a detailed title and a concise, rich, and highly detailed summary content of 200 to 250 words per chapter. You MUST break down the content of each chapter into 2 to 4 distinct paragraphs, separating each paragraph with a blank line (double newline, i.e., '\\n\\n'). This is a strict requirement. For English and Arabic, this structure and abundant punctuation (commas, semicolons, periods) are also critical to guarantee that the TTS narration voice reads with comfortable pacing and breathes naturally. Ensure information density is very high to cover 80-90% of actual learning takeaways within this count.\n"
             "Do NOT include programmatically-inserted greetings (like 'Welcome to Partwk') in the text itself."
@@ -756,7 +846,7 @@ def main():
         chapters_data = None
         max_retries = 3
         retry_delay = 3
-        models_to_try = ["gemini-2.5-flash", "gemini-2.5-pro"]
+        models_to_try = ["gemini-flash-latest", "gemini-pro-latest"]
 
         for attempt in range(1, max_retries + 1):
             model_to_use = models_to_try[(attempt - 1) % len(models_to_try)]
@@ -815,7 +905,7 @@ def main():
                     prefix = f"{chap_title}، مرحباً بكم في هذا الملخص الصوتي لكتاب {translated_title}، بقلم {translated_author}. "
                 elif lang_input == "ku":
                     chap_title = "پێشەکی"
-                    prefix = f"{chap_title}، بەخێربێن بۆ خوێندنەوەی کورتەکراوەی پەڕتووکی {translated_title}، نووسینی {translated_author}. "
+                    prefix = f"{chap_title}، بەخێربێن بۆ خوێندنەوەی کورتکراوەی پەرتووکی {translated_title}، نووسینی {translated_author}. "
                 else:
                     chap_title = "Introduction"
                     prefix = f"{chap_title}, welcome to this audio summary of {book_title}, by {author}. "
@@ -832,7 +922,7 @@ def main():
                 elif lang_input == "ku":
                     chap_title = "کۆتایی"
                     prefix = f"{chap_title}، "
-                    suffix = f"\n\nئێستا خوێندنەوەی کورتەکراوەی پەڕتووکی {translated_title} کۆتایی پێهات، نووسینی {translated_author}."
+                    suffix = f"\n\nئێستا خوێندنەوەی کورتکراوەی پەرتووکی {translated_title} کۆتایی پێهات، نووسینی {translated_author}."
                 else:
                     chap_title = "Conclusion"
                     prefix = f"{chap_title}, "
@@ -1123,7 +1213,7 @@ def main():
 
         try:
             study_resp = client.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-flash-latest",
                 contents=study_prompt + "\n\nSummary:\n" + combined_summary,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -1208,6 +1298,7 @@ def main():
                 "coverColorHex1": cover_color_hex_1,
                 "coverColorHex2": cover_color_hex_2,
                 "coverTheme": cover_theme,
+                "isPublished": False,
                 "updatedAt": current_time_iso
             }
         else:
@@ -1226,6 +1317,7 @@ def main():
                 "coverTheme": cover_theme,
                 "isPremium": True,
                 "isDownloadable": True,
+                "isPublished": False,
                 "audioUrl": {},
                 "tags": [],
                 "fiveMinuteSummary": {},
@@ -1239,8 +1331,9 @@ def main():
 
         try:
             # Save Book to Firestore
-            set_firestore_document("books", doc_id, book_doc)
-            print(f"    [✓] Saved book successfully under ID: '{doc_id}'")
+            target_collection = "books_draft"
+            set_firestore_document(target_collection, doc_id, book_doc)
+            print(f"    [✓] Saved book successfully under ID: '{doc_id}' in collection '{target_collection}'")
 
             # Save Quizzes to Firestore
             if quiz_questions:
@@ -1258,7 +1351,7 @@ def main():
                         for q in quiz_questions
                     ]
                 }
-                set_firestore_document("quizzes", quiz_doc_id, quiz_doc)
+                set_firestore_document("quizzes_draft", quiz_doc_id, quiz_doc)
                 print(f"    [✓] Saved quiz successfully under ID: '{quiz_doc_id}'")
 
             # Save Flashcards to Firestore
@@ -1273,7 +1366,7 @@ def main():
                         "front": fc["front"],
                         "back": fc["back"]
                     }
-                    set_firestore_document("flashcards", fc_doc_id, fc_doc)
+                    set_firestore_document("flashcards_draft", fc_doc_id, fc_doc)
                 print(f"    [✓] Saved flashcards successfully.")
 
             print(f"\n[✓] Finished processing '{book_title}' successfully!")

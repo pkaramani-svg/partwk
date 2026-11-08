@@ -8,6 +8,7 @@ import '../learning/learning_path_screen.dart';
 import '../book/book_details_screen.dart';
 import '../../services/download_service.dart';
 import '../../core/services/network_guard.dart';
+import 'search_screen.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({Key? key}) : super(key: key);
@@ -66,12 +67,48 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(localizations.translate('explore')),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => SearchScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => SearchScreen()),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.withOpacity(0.15)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.search, color: Colors.grey.shade400, size: 20),
+                    const SizedBox(width: 12),
+                    Text(
+                      localizations.translate('search'),
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             // Category horizontal slider
             Text(
               localizations.translate('categories'),
@@ -268,7 +305,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           (() {
                             final count = path.bookIds.length;
                             if (langCode == 'ku') {
-                              return '$count کورتەکراوە • بڕوانامەی لەگەڵە';
+                              return '$count کورتکراوە • بڕوانامەی لەگەڵە';
                             } else if (langCode == 'ar') {
                               return '$count ملخصات • تتضمن شهادة';
                             } else {
@@ -335,7 +372,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             Text(
               (() {
                 final count = playlist.books.length;
-                if (langCode == 'ku') return '$count کورتەکراوە';
+                if (langCode == 'ku') return '$count کورتکراوە';
                 if (langCode == 'ar') return '$count ملخصات';
                 return '$count summaries';
               })(),
@@ -401,8 +438,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     // 3. Leader's Edge
     final leadershipBooks = books.where((b) => 
       b.categoryIds.contains('cat-business') || 
-      b.categoryIds.contains('cat-leadership') ||
-      b.categoryIds.contains('cat-entrepreneurship')
+      b.categoryIds.contains('cat-leadership')
     ).toList();
     if (leadershipBooks.length >= 2) {
       candidates.add(FeaturedPlaylist(
@@ -412,9 +448,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
           'ar': 'تميز القادة',
         },
         description: {
-          'en': 'Sharpen your strategic thinking, leadership, business skill, and startup drive.',
-          'ku': 'بیرکردنەوەی ستراتیژی، کارامەییەکانی سەرکردایەتی و کارسازی خۆت پێش بخە.',
-          'ar': 'طور تفكيرك الاستراتيجي، ومهاراتك القيادية، وقدراتك الريادية.',
+          'en': 'Sharpen your strategic thinking, leadership, and business skills.',
+          'ku': 'بیرکردنەوەی ستراتیژی، کارامەییەکانی سەرکردایەتی و بازرگانی خۆت پێش بخە.',
+          'ar': 'طور تفكيرك الاستراتيجي، ومهاراتك القيادية، وقدراتك التجارية.',
         },
         color: Colors.blueAccent,
         icon: Icons.insights,

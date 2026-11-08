@@ -1,6 +1,10 @@
 # Miscellaneous
 *.class
 *.log
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+firepit-log.txt
 *.pyc
 *.swp
 .DS_Store
@@ -49,3 +53,9 @@ admin_panel/.env
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Scratch and Temporary Media
+scratch/
+temp_pipeline_audio/
+temp_pipeline_covers/
+.tool/

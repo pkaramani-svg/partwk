@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import OnlineUsers from './pages/OnlineUsers';
 import UsersManagement from './pages/UsersManagement';
 import ContentManagement from './pages/ContentManagement';
+import PopupManagement from './pages/PopupManagement';
 import Settings from './pages/Settings';
 import './App.css';
 
@@ -18,6 +19,7 @@ function App() {
           <Route path="online" element={<OnlineUsers />} />
           <Route path="users" element={<UsersManagement />} />
           <Route path="content" element={<ContentManagement />} />
+          <Route path="popups" element={<PopupManagement />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

@@ -1,8 +1,9 @@
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage, firebaseConfig } from '../firebase/config';
+import { db, storage, firebaseConfig, auth } from '../firebase/config';
 import { getAuth, sendPasswordResetEmail as firebaseSendPasswordResetEmail, createUserWithEmailAndPassword } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // User Management
 export const fetchUsers = async () => {
@@ -21,6 +22,13 @@ export const subscribeToUsers = (callback) => {
 
 export const updateUserStatus = async (userId, data) => {
   const userRef = doc(db, 'users', userId);
+  // Entitlements and family relationships are backend-owned. This panel may
+  // edit profile/support fields only; it must not fan out browser writes to
+  // other accounts or infer a family entitlement from legacy arrays.
+  delete data.familyMembers;
+  delete data.hasFamilyPremium;
+  await updateDoc(userRef, data);
+  return;
   
   // 1. Fetch current user document to see previous state for family entitlements
   try {
@@ -82,6 +90,10 @@ export const updateUserStatus = async (userId, data) => {
 
 export const deleteUser = async (userId) => {
   const userRef = doc(db, 'users', userId);
+  // Do not mutate related accounts in the browser. A backend deletion/migration
+  // worker must revoke family state transactionally before destructive action.
+  await deleteDoc(userRef);
+  return;
   try {
     const userSnap = await getDoc(userRef);
     if (userSnap.exists()) {
@@ -117,43 +129,53 @@ export const deleteUser = async (userId) => {
 };
 
 export const sendPasswordResetEmail = async (email) => {
-  const response = await fetch('https://us-central1-partwk-bd4ec.cloudfunctions.net/sendCustomPasswordReset', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      data: { email: email }
-    })
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to send custom password reset email');
-  }
-};
-
-export const updateUserPasswordDirectly = async (userId, userEmail, newPassword) => {
   try {
-    const response = await fetch('https://us-central1-partwk-bd4ec.cloudfunctions.net/adminUpdateUserPassword', {
+    const fn = httpsCallable(getFunctions(), 'sendCustomPasswordReset');
+    const result = await fn({ email });
+    return result.data;
+  } catch (callableErr) {
+    const response = await fetch('https://us-central1-partwk-bd4ec.cloudfunctions.net/sendCustomPasswordReset', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        data: { uid: userId, email: userEmail, newPassword: newPassword }
+        data: { email }
+      })
+    });
+    if (!response.ok) {
+      throw new Error(callableErr.message || 'Failed to send custom password reset email');
+    }
+  }
+};
+
+export const updateUserPasswordDirectly = async (userId, userEmail, newPassword) => {
+  try {
+    const fn = httpsCallable(getFunctions(), 'adminUpdateUserPassword');
+    const result = await fn({ uid: userId, email: userEmail, newPassword });
+    return result.data;
+  } catch (callableErr) {
+    console.warn('httpsCallable attempt failed, falling back to HTTP fetch:', callableErr);
+    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch('https://us-central1-partwk-bd4ec.cloudfunctions.net/adminUpdateUserPassword', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        data: { uid: userId, email: userEmail, newPassword }
       })
     });
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || 'Cloud function update failed');
+      const message = errJson.error?.message || callableErr.message || 'Server rejected password update. Administrator permissions required.';
+      throw new Error(message);
     }
-  } catch (e) {
-    console.warn("Cloud function fallback: Storing password update request in Firestore user record:", e);
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, {
-      pendingAdminPassword: newPassword,
-      passwordUpdatedAt: new Date().toISOString()
-    });
   }
 };
 
@@ -193,27 +215,145 @@ export const createNewUserManually = async (userData) => {
 
 // Book Management
 export const fetchBooks = async () => {
-  const querySnapshot = await getDocs(collection(db, 'books'));
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const [publishedSnap, draftSnap] = await Promise.all([
+    getDocs(collection(db, 'books')),
+    getDocs(collection(db, 'books_draft'))
+  ]);
+  
+  const publishedBooks = [];
+  const misplacedDrafts = [];
+  
+  publishedSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    if (data.isPublished === false) {
+      misplacedDrafts.push({ id: doc.id, ...data });
+    } else {
+      publishedBooks.push({ id: doc.id, ...data, isPublished: true });
+    }
+  });
+  
+  if (misplacedDrafts.length > 0) {
+    const batch = writeBatch(db);
+    misplacedDrafts.forEach((book) => {
+      const draftRef = doc(db, 'books_draft', book.id);
+      const publishedRef = doc(db, 'books', book.id);
+      batch.set(draftRef, { ...book, isPublished: false });
+      batch.delete(publishedRef);
+    });
+    await batch.commit();
+    
+    const updatedDraftSnap = await getDocs(collection(db, 'books_draft'));
+    const draftBooks = updatedDraftSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), isPublished: false }));
+    return [...publishedBooks, ...draftBooks];
+  }
+  
+  const draftBooks = draftSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), isPublished: false }));
+  return [...publishedBooks, ...draftBooks];
 };
 
-export const addBook = async (bookData) => {
-  const newBookRef = doc(collection(db, 'books'));
+export const getBookForEditing = async (bookId) => {
+  const result = await httpsCallable(getFunctions(), 'getBookForEditing')({ bookId });
+  return { id: bookId, ...result.data.book };
+};
+
+const publishBookLanguage = async (bookId, language) => {
+  await httpsCallable(getFunctions(), 'publishBookLanguage')({ bookId, language });
+};
+
+export const setBookLanguageVisibility = async (bookId, language, visible) => {
+  await httpsCallable(getFunctions(), 'setBookLanguageVisibility')({ bookId, language, visible });
+};
+
+export const addBook = async (bookData, language) => {
+  const isPub = bookData.isPublished !== false;
+  if (isPub && language) {
+    const draft = doc(collection(db, 'books_draft'));
+    await setDoc(draft, { ...bookData, isPublished: false });
+    await publishBookLanguage(draft.id, language);
+    return draft.id;
+  }
+  if (isPub && bookData.isPremium === true) throw new Error('Select a language to publish securely.');
+  const collectionName = isPub ? 'books' : 'books_draft';
+  const newBookRef = doc(collection(db, collectionName));
   await setDoc(newBookRef, bookData);
   return newBookRef.id;
 };
 
-export const updateBook = async (bookId, bookData) => {
-  const bookRef = doc(db, 'books', bookId);
-  await updateDoc(bookRef, bookData);
+export const updateBook = async (bookId, bookData, language) => {
+  const publishedRef = doc(db, 'books', bookId);
+  const draftRef = doc(db, 'books_draft', bookId);
+  
+  const publishedSnap = await getDoc(publishedRef);
+  const existsInPublished = publishedSnap.exists();
+  
+  const currentDocSnap = existsInPublished ? publishedSnap : await getDoc(draftRef);
+  if (!currentDocSnap.exists()) {
+    throw new Error("Book not found in any collection.");
+  }
+  
+  const currentData = language ? await getBookForEditing(bookId) : currentDocSnap.data();
+  delete currentData.id;
+  let targetIsPublished = currentData.isPublished !== false;
+  
+  const mergedData = { ...currentData };
+  Object.keys(bookData).forEach((key) => {
+    if (key.includes('.')) {
+      const parts = key.split('.');
+      if (parts.length === 2) {
+        const [parent, child] = parts;
+        mergedData[parent] = {
+          ...(mergedData[parent] || {}),
+          [child]: bookData[key]
+        };
+      }
+    } else {
+      mergedData[key] = bookData[key];
+    }
+  });
+  
+  if (bookData.isPublished !== undefined) {
+    targetIsPublished = bookData.isPublished;
+    mergedData.isPublished = targetIsPublished;
+  }
+
+  if (targetIsPublished && language) {
+    await setDoc(draftRef, { ...mergedData, isPublished: false });
+    await publishBookLanguage(bookId, language);
+    return;
+  }
+
+  if (targetIsPublished && mergedData.isPremium === true) {
+    throw new Error('Premium publishing is unavailable until secure publishing is configured. Save this book as a draft.');
+  }
+  
+  if (existsInPublished && !targetIsPublished) {
+    await setDoc(draftRef, mergedData);
+    await deleteDoc(publishedRef);
+  } else if (!existsInPublished && targetIsPublished) {
+    await setDoc(publishedRef, mergedData);
+    await deleteDoc(draftRef);
+  } else {
+    const targetRef = targetIsPublished ? publishedRef : draftRef;
+    await setDoc(targetRef, mergedData);
+  }
 };
 
 export const deleteBook = async (bookId) => {
-  await deleteDoc(doc(db, 'books', bookId));
+  await Promise.all([
+    deleteDoc(doc(db, 'books', bookId)),
+    deleteDoc(doc(db, 'books_draft', bookId))
+  ]);
+};
+
+export const publishBooksBatch = async (bookIds, publishState = true) => {
+  if (publishState) {
+    throw new Error('Publish each book from its editor after selecting the language to publish.');
+  }
+  throw new Error('Bulk unpublishing is temporarily unavailable to avoid replacing saved drafts.');
 };
 
 export const addQuizData = async (bookId, langCode, quizzesArray) => {
-  const quizRef = doc(db, 'quizzes', `quiz_${bookId}_${langCode}`);
+  const quizRef = doc(db, 'quizzes_draft', `quiz_${bookId}_${langCode}`);
   await setDoc(quizRef, {
     id: `quiz_${bookId}_${langCode}`,
     bookId: bookId,
@@ -225,7 +365,7 @@ export const addQuizData = async (bookId, langCode, quizzesArray) => {
 export const addFlashcardsData = async (bookId, langCode, flashcardsArray) => {
   // Save each flashcard to the flashcards collection
   for (const fc of flashcardsArray) {
-    const fcRef = doc(collection(db, 'flashcards'));
+    const fcRef = doc(collection(db, 'flashcards_draft'));
     await setDoc(fcRef, {
       ...fc,
       bookId: bookId,
@@ -235,9 +375,9 @@ export const addFlashcardsData = async (bookId, langCode, flashcardsArray) => {
 };
 
 export const checkAiDataExists = async (bookId, langCode) => {
-  const q = query(collection(db, 'quizzes'), where('bookId', '==', bookId), where('langCode', '==', langCode));
-  const snapshot = await getDocs(q);
-  return !snapshot.empty;
+  const [draft, published] = await Promise.all(['quizzes_draft', 'quizzes'].map(name =>
+    getDocs(query(collection(db, name), where('bookId', '==', bookId), where('langCode', '==', langCode)))));
+  return !draft.empty || !published.empty;
 };
 
 // Storage Management
@@ -260,3 +400,55 @@ export const saveGlobalSettings = async (settingsData) => {
   const settingsRef = doc(db, 'settings', 'global');
   await setDoc(settingsRef, settingsData, { merge: true });
 };
+
+// Popup Management
+export const fetchPopups = async () => {
+  const querySnapshot = await getDocs(collection(db, 'popups'));
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const addPopup = async (popupData) => {
+  const newRef = doc(collection(db, 'popups'));
+  const id = newRef.id;
+  const data = {
+    ...popupData,
+    id,
+    analytics: popupData.analytics || { seen: 0, clicked: 0, dismissed: 0, conversion: 0 },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  await setDoc(newRef, data);
+  return id;
+};
+
+export const updatePopup = async (popupId, popupData) => {
+  const popupRef = doc(db, 'popups', popupId);
+  const data = {
+    ...popupData,
+    updatedAt: new Date().toISOString()
+  };
+  await updateDoc(popupRef, data);
+};
+
+export const deletePopup = async (popupId) => {
+  await deleteDoc(doc(db, 'popups', popupId));
+};
+
+// Audit Logging
+export const fetchAuditLogs = async () => {
+  const querySnapshot = await getDocs(collection(db, 'audit_logs'));
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const writeAuditLog = async (action, details) => {
+  const adminEmail = auth.currentUser?.email || 'unknown_admin';
+  const newRef = doc(collection(db, 'audit_logs'));
+  await setDoc(newRef, {
+    id: newRef.id,
+    adminEmail,
+    action,
+    details,
+    timestamp: new Date().toISOString()
+  });
+};
+

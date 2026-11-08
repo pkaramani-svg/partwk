@@ -128,6 +128,9 @@ class AppTheme {
   }
 
   static TextTheme _getTextTheme(String langCode, bool isDark) {
+    if (const bool.fromEnvironment('USE_FIREBASE_EMULATORS')) {
+      return (isDark ? ThemeData.dark() : ThemeData.light()).textTheme;
+    }
     final textColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
     final subColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
 

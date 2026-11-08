@@ -11,7 +11,7 @@
   "license": "ISC",
   "type": "commonjs",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0",

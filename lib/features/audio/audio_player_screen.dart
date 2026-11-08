@@ -3,11 +3,15 @@ import 'package:provider/provider.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/services/audio_service.dart';
 import '../../core/services/service_locator.dart';
-import '../profile/settings_screen.dart';
 import '../auth/login_register_screen.dart';
 import '../../services/download_service.dart';
 import '../book/summary_reader_screen.dart';
 import '../../core/services/streak_tracker.dart';
+import '../../core/services/protected_text_service.dart';
+import '../../core/services/download_manager.dart';
+import '../../core/services/network_guard.dart';
+import '../../core/widgets/partwk_toolbar_button.dart';
+import '../../core/widgets/partwk_audio_visualizer.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
   final String bookId;
@@ -19,9 +23,10 @@ class AudioPlayerScreen extends StatefulWidget {
   final int initialChapterIndex;
   final int initialPositionSecs;
   final int bookDurationSecs;
+  final bool isPremium;
 
   const AudioPlayerScreen({
-    Key? key,
+    super.key,
     required this.bookId,
     required this.langCode,
     required this.bookTitle,
@@ -31,7 +36,8 @@ class AudioPlayerScreen extends StatefulWidget {
     this.initialChapterIndex = 0,
     this.initialPositionSecs = 0,
     this.bookDurationSecs = 0,
-  }) : super(key: key);
+    this.isPremium = false,
+  });
 
   @override
   State<AudioPlayerScreen> createState() => _AudioPlayerScreenState();
@@ -39,12 +45,12 @@ class AudioPlayerScreen extends StatefulWidget {
 
 class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTickerProviderStateMixin {
   late AnimationController _diskController;
-  String _selectedVoice = 'Standard Narrator';
 
   bool _isTextPanelOpen = false;
   int _lastActiveSegmentIndex = -1;
   final List<GlobalKey> _segmentKeys = [];
   final ScrollController _textScrollController = ScrollController();
+  List<Map<String, dynamic>>? _textChapters;
 
   @override
   void initState() {
@@ -60,6 +66,59 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
     }
 
     AppLocator.audio.addListener(_audioServiceListener);
+    _loadProtectedText();
+  }
+
+  Future<void> _loadProtectedText() async {
+    try {
+      final books = await AppLocator.db.fetchBooks();
+      var book = books.firstWhere((item) => item.id == widget.bookId);
+      if (!book.isPremium) return;
+      final hasNet = await NetworkGuard.hasConnection();
+      if (!hasNet) {
+        final isDownloaded = await DownloadManager.isEditionDownloaded(book.id, widget.langCode);
+        if (isDownloaded) {
+          book = await DownloadManager.loadBookContent(book, languageCode: widget.langCode);
+        } else {
+          return;
+        }
+      } else {
+        book = await ProtectedTextService.hydrate(book, widget.langCode);
+      }
+      final chapters = book.getChapterSummaries(widget.langCode);
+      if (mounted && chapters.length == widget.chapters.length) {
+        setState(() => _textChapters = chapters);
+      }
+    } catch (_) {
+      // Playback remains available; protected text requires a valid licence or
+      // network entitlement and will not be fabricated from catalogue data.
+    }
+  }
+
+  Widget _buildPlayerCoverImage(double height) {
+    if (height <= 0) return const SizedBox.shrink();
+    final localCover = DownloadService.getLocalCoverFileIfExists(widget.bookId, widget.langCode);
+    if (localCover != null) {
+      return Image.file(
+        localCover,
+        height: height,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return DownloadService.buildCoverPlaceholder(height: height, title: widget.bookTitle);
+        },
+      );
+    }
+    if (widget.coverUrl.isNotEmpty && widget.coverUrl.startsWith('http')) {
+      return Image.network(
+        widget.coverUrl,
+        height: height,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return DownloadService.buildCoverPlaceholder(height: height, title: widget.bookTitle);
+        },
+      );
+    }
+    return DownloadService.buildCoverPlaceholder(height: height, title: widget.bookTitle);
   }
 
   void _audioServiceListener() {
@@ -155,7 +214,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                       ),
                       onTap: () {
                         if (AppLocator.audio.currentBookId != widget.bookId || AppLocator.audio.currentChapterIndex != index || AppLocator.audio.currentLangCode != widget.langCode) {
-                          AppLocator.audio.play(widget.bookId, widget.langCode, widget.bookTitle, widget.coverUrl, widget.globalAudioUrl, widget.chapters, startIndex: index, bookDurationSecs: widget.bookDurationSecs);
+                          AppLocator.audio.play(widget.bookId, widget.langCode, widget.bookTitle, widget.coverUrl, widget.globalAudioUrl, widget.chapters, startIndex: index, bookDurationSecs: widget.bookDurationSecs, isPremium: widget.isPremium || AppLocator.audio.isCurrentBookPremium);
                         }
                         Navigator.pop(context);
                       },
@@ -219,7 +278,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
     if (widget.chapters.isEmpty || audioService.currentChapterIndex >= widget.chapters.length) {
       return false;
     }
-    final ch = widget.chapters[audioService.currentChapterIndex];
+    final ch = (_textChapters ?? widget.chapters)[audioService.currentChapterIndex];
     final segs = ch['segments'];
     if (segs != null && segs is List && segs.isNotEmpty) {
       return true;
@@ -580,70 +639,120 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
         },
         child: Scaffold(
           appBar: AppBar(
-            title: Text(localizations.translate('listen_audio')),
+            automaticallyImplyLeading: false,
             elevation: 0,
-            leading: Builder(
-              builder: (ctx) => IconButton(
-                icon: const Icon(Icons.keyboard_arrow_down, size: 28),
-                onPressed: () async {
-                  await StreakTracker.checkAndShowStreakPopup(ctx);
-                  if (ctx.mounted) {
-                    Navigator.of(ctx).pop();
-                  }
-                },
-              ),
-            ),
-            actions: [
-              Consumer<AudioService>(
-                builder: (context, audioService, _) {
-                  final isTimerActive = audioService.sleepTimerRemaining != null;
-                  return Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.menu_book_outlined),
-                        tooltip: 'Read Summary',
-                        onPressed: () {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => SummaryReaderScreen(
-                                bookId: widget.bookId,
-                                initialChapterIndex: audioService.currentChapterIndex,
+            titleSpacing: 16,
+            title: Consumer<AudioService>(
+              builder: (context, audioService, _) {
+                final isTimerActive = audioService.sleepTimerRemaining != null;
+                final isDark = theme.brightness == Brightness.dark;
+                final bool isCurrentlyPlaying = audioService.isPlaying && audioService.currentBookId == widget.bookId;
+
+                return Row(
+                  children: [
+                    PartwkToolbarButton(
+                      icon: Icons.keyboard_arrow_down_rounded,
+                      tooltip: localizations.translate('back'),
+                      size: 38,
+                      iconSize: 24,
+                      isDark: isDark,
+                      onPressed: () async {
+                        await StreakTracker.checkAndShowStreakPopup(context);
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ExcludeSemantics(
+                            child: SizedBox(
+                              height: 12,
+                              child: PartwkAudioVisualizer(
+                                isPlaying: isCurrentlyPlaying,
+                                color: theme.colorScheme.secondary,
                               ),
                             ),
-                          );
-                        },
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            widget.bookTitle,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.format_list_bulleted),
-                        tooltip: localizations.translate('chapters'),
-                        onPressed: () => _showChaptersList(context, audioService),
-                      ),
-                      if (isTimerActive)
-                        Text(
-                          _formatDuration(audioService.sleepTimerRemaining!),
-                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.secondary, fontWeight: FontWeight.bold),
-                        ),
-                      IconButton(
-                        icon: Icon(isTimerActive ? Icons.timer : Icons.bedtime_outlined),
-                        color: isTimerActive ? theme.colorScheme.secondary : null,
-                      tooltip: 'Sleep Timer',
+                    ),
+                    const SizedBox(width: 8),
+                    // 1. Read / open text summary — book icon
+                    PartwkToolbarButton(
+                      icon: Icons.menu_book_rounded,
+                      tooltip: localizations.translate('read_summary'),
+                      size: 38,
+                      iconSize: 19,
+                      isDark: isDark,
+                      onPressed: () {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => SummaryReaderScreen(
+                              bookId: widget.bookId,
+                              initialChapterIndex: audioService.currentChapterIndex,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    // 2. Key Points / chapter jump list — list icon
+                    PartwkToolbarButton(
+                      icon: Icons.format_list_bulleted_rounded,
+                      tooltip: localizations.translate('chapters'),
+                      size: 38,
+                      iconSize: 19,
+                      isDark: isDark,
+                      onPressed: () => _showChaptersList(context, audioService),
+                    ),
+                    const SizedBox(width: 6),
+                    // 3. Sleep Timer — moon/timer icon
+                    PartwkToolbarButton(
+                      icon: isTimerActive ? Icons.bedtime_rounded : Icons.bedtime_outlined,
+                      tooltip: isTimerActive
+                          ? '${localizations.translate('sleep_timer')} (${_formatDuration(audioService.sleepTimerRemaining!)})'
+                          : localizations.translate('sleep_timer'),
+                      size: 38,
+                      iconSize: 19,
+                      isDark: isDark,
+                      isActive: isTimerActive,
+                      badge: isTimerActive
+                          ? Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.secondary,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isDark ? const Color(0xFF0F172A) : Colors.white,
+                                  width: 1.5,
+                                ),
+                              ),
+                            )
+                          : null,
                       onPressed: () => _showSleepTimerDialog(context, audioService),
                     ),
                   ],
                 );
               },
             ),
-            IconButton(
-              icon: const Icon(Icons.settings),
-              tooltip: 'Settings',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                );
-              },
-            )
-          ],
-        ),
+          ),
         body: Consumer<AudioService>(
           builder: (context, audioService, child) {
             final isPlaying = audioService.isPlaying && audioService.currentBookId == widget.bookId;
@@ -664,7 +773,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
             int activeSegmentIndex = -1;
 
             if (hasSegments) {
-              final ch = widget.chapters[audioService.currentChapterIndex];
+              final ch = (_textChapters ?? widget.chapters)[audioService.currentChapterIndex];
               final int chDuration = ch['duration'] is int
                   ? ch['duration'] as int
                   : (ch['duration'] as num?)?.toInt() ?? 0;
@@ -737,28 +846,10 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                                 ),
                                 child: _isTextPanelOpen
                                     ? const SizedBox.shrink()
-                                      : ClipRRect(
-                                          borderRadius: BorderRadius.circular(16),
-                                          child: DownloadService.isBookDownloadedSync(widget.bookId)
-                                              ? Image.file(
-                                                  DownloadService.getLocalCoverFileSync(widget.bookId),
-                                                  height: _isTextPanelOpen ? 0 : (screenHeight < 700 ? 160 : (screenHeight < 800 ? 200 : 280)),
-                                                  fit: BoxFit.contain,
-                                                )
-                                              : Image.network(
-                                                  widget.coverUrl,
-                                                  height: _isTextPanelOpen ? 0 : (screenHeight < 700 ? 160 : (screenHeight < 800 ? 200 : 280)),
-                                                  fit: BoxFit.contain,
-                                                  errorBuilder: (context, error, stackTrace) {
-                                                    return Container(
-                                                      height: _isTextPanelOpen ? 0 : (screenHeight < 700 ? 160 : (screenHeight < 800 ? 200 : 280)),
-                                                      color: Colors.grey[900],
-                                                      alignment: Alignment.center,
-                                                      child: const Icon(Icons.music_note, color: Colors.white, size: 80),
-                                                    );
-                                                  },
-                                                ),
-                                        ),
+                                    : ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: _buildPlayerCoverImage(_isTextPanelOpen ? 0 : (screenHeight < 700 ? 160 : (screenHeight < 800 ? 200 : 280))),
+                                      ),
                               ),
                             ),
                           SizedBox(height: _isTextPanelOpen ? 0 : (screenHeight < 700 ? 12 : 24)),
@@ -840,13 +931,15 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                             runSpacing: 8,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.skip_previous, size: 32),
+                                icon: const Icon(Icons.skip_previous_rounded, size: 32),
+                                tooltip: localizations.translate('previous_chapter'),
                                 onPressed: () {
                                   audioService.previousChapter();
                                 },
                               ),
                               IconButton(
-                                icon: const Icon(Icons.replay_10, size: 28),
+                                icon: const Icon(Icons.replay_10_rounded, size: 28),
+                                tooltip: localizations.translate('rewind_10s'),
                                 onPressed: () {
                                   audioService.seek(audioService.position - const Duration(seconds: 15));
                                 },
@@ -856,7 +949,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                                 backgroundColor: theme.colorScheme.secondary,
                                 child: IconButton(
                                   icon: Icon(
-                                    isPlaying ? Icons.pause : Icons.play_arrow,
+                                    isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                                     size: 32,
                                     color: Colors.white,
                                   ),
@@ -886,13 +979,15 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.forward_10, size: 28),
+                                icon: const Icon(Icons.forward_10_rounded, size: 28),
+                                tooltip: localizations.translate('forward_10s'),
                                 onPressed: () {
                                   audioService.seek(audioService.position + const Duration(seconds: 15));
                                 },
                               ),
                               IconButton(
-                                icon: const Icon(Icons.skip_next, size: 32),
+                                icon: const Icon(Icons.skip_next_rounded, size: 32),
+                                tooltip: localizations.translate('next_chapter'),
                                 onPressed: () {
                                   audioService.nextChapter();
                                 },
@@ -906,7 +1001,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.speed, size: 20),
+                              Icon(Icons.speed_rounded, size: 20, color: theme.colorScheme.secondary),
                               const SizedBox(width: 8),
                               DropdownButton<double>(
                                 value: audioService.speed,
@@ -961,25 +1056,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
-                            child: DownloadService.isBookDownloadedSync(widget.bookId)
-                                ? Image.file(
-                                    DownloadService.getLocalCoverFileSync(widget.bookId),
-                                    height: screenHeight < 700 ? 130 : (screenHeight < 800 ? 180 : 250),
-                                    fit: BoxFit.contain,
-                                  )
-                                : Image.network(
-                                    widget.coverUrl,
-                                    height: screenHeight < 700 ? 130 : (screenHeight < 800 ? 180 : 250),
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        height: screenHeight < 700 ? 130 : (screenHeight < 800 ? 180 : 250),
-                                        color: Colors.grey[900],
-                                        alignment: Alignment.center,
-                                        child: const Icon(Icons.music_note, color: Colors.white, size: 80),
-                                      );
-                                    },
-                                  ),
+                            child: _buildPlayerCoverImage(screenHeight < 700 ? 130 : (screenHeight < 800 ? 180 : 250)),
                           ),
                         ),
                       ),
@@ -1058,13 +1135,15 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                       runSpacing: 8,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.skip_previous, size: 32),
+                          icon: const Icon(Icons.skip_previous_rounded, size: 32),
+                          tooltip: localizations.translate('previous_chapter'),
                           onPressed: () {
                             audioService.previousChapter();
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.replay_10, size: 28),
+                          icon: const Icon(Icons.replay_10_rounded, size: 28),
+                          tooltip: localizations.translate('rewind_10s'),
                           onPressed: () {
                             audioService.seek(audioService.position - const Duration(seconds: 15));
                           },
@@ -1074,7 +1153,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                           backgroundColor: theme.colorScheme.secondary,
                           child: IconButton(
                             icon: Icon(
-                              isPlaying ? Icons.pause : Icons.play_arrow,
+                              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                               size: 32,
                               color: Colors.white,
                             ),
@@ -1104,13 +1183,15 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.forward_10, size: 28),
+                          icon: const Icon(Icons.forward_10_rounded, size: 28),
+                          tooltip: localizations.translate('forward_10s'),
                           onPressed: () {
                             audioService.seek(audioService.position + const Duration(seconds: 15));
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.skip_next, size: 32),
+                          icon: const Icon(Icons.skip_next_rounded, size: 32),
+                          tooltip: localizations.translate('next_chapter'),
                           onPressed: () {
                             audioService.nextChapter();
                           },
@@ -1123,7 +1204,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.speed, size: 20),
+                        Icon(Icons.speed_rounded, size: 20, color: theme.colorScheme.secondary),
                         const SizedBox(width: 8),
                         DropdownButton<double>(
                           value: audioService.speed,

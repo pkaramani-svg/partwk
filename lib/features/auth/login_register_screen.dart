@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuthException;
+import 'package:provider/provider.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/widgets/custom_button.dart';
@@ -50,7 +52,13 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
         }
       }
     } catch (e) {
-      _showError(e.toString());
+      if (mounted) {
+        final localizations = AppLocalizations.of(context)!;
+        final errorMsg = _mapAuthErrorToMessage(e, localizations, isLogin: _isLogin);
+        if (errorMsg != null) {
+          _showError(errorMsg);
+        }
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -66,12 +74,20 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
       }
       await AppLocator.audio.init();
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainNavigation()),
-        );
+        if (AppLocator.auth.isAuthenticated) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const MainNavigation()),
+          );
+        }
       }
     } catch (e) {
-      _showError(e.toString());
+      if (mounted) {
+        final localizations = AppLocalizations.of(context)!;
+        final errorMsg = _mapAuthErrorToMessage(e, localizations, isLogin: true, isSocial: true);
+        if (errorMsg != null) {
+          _showError(errorMsg);
+        }
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -89,12 +105,19 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
         );
       }
     } catch (e) {
-      _showError(e.toString());
+      if (mounted) {
+        final localizations = AppLocalizations.of(context)!;
+        final errorMsg = _mapAuthErrorToMessage(e, localizations, isLogin: true);
+        if (errorMsg != null) {
+          _showError(errorMsg);
+        }
+      }
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _forgotPassword() async {
+    final localizations = AppLocalizations.of(context)!;
     String email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
       // Show dialog to collect email
@@ -102,30 +125,40 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
       final submittedEmail = await showDialog<String>(
         context: context,
         builder: (context) {
-          return AlertDialog(
-            title: const Text('Reset Password'),
-            content: TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                hintText: 'Enter your email address',
+          return Directionality(
+            textDirection: localizations.textDirection,
+            child: AlertDialog(
+              title: Text(
+                localizations.translate('reset_password_title'),
+                textAlign: localizations.isRtl ? TextAlign.right : TextAlign.left,
               ),
-              keyboardType: TextInputType.emailAddress,
+              content: TextField(
+                controller: controller,
+                textAlign: localizations.isRtl ? TextAlign.right : TextAlign.left,
+                textDirection: localizations.textDirection,
+                decoration: InputDecoration(
+                  hintText: localizations.translate('reset_password_email_hint'),
+                ),
+                keyboardType: TextInputType.emailAddress,
+                autofocus: true,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(localizations.translate('cancel_btn')),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, controller.text.trim()),
+                  child: Text(localizations.translate('send_btn')),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, controller.text.trim()),
-                child: const Text('Send'),
-              ),
-            ],
           );
         },
       );
-      if (submittedEmail == null || submittedEmail.isEmpty || !submittedEmail.contains('@')) {
-        if (submittedEmail != null) _showError('Invalid email address');
+      if (submittedEmail == null) return;
+      if (submittedEmail.isEmpty || !submittedEmail.contains('@')) {
+        _showError(localizations.translate('invalid_email_error'));
         return;
       }
       email = submittedEmail;
@@ -135,28 +168,33 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     try {
       await AppLocator.auth.resetPassword(email);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password reset email sent! Check your inbox (and spam folder).'), backgroundColor: Colors.green),
-        );
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                localizations.translate('reset_password_success'),
+                textAlign: localizations.isRtl ? TextAlign.right : TextAlign.left,
+                textDirection: localizations.textDirection,
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
       }
     } catch (e) {
       if (mounted) {
-        if (e.toString().contains('Email is not registered')) {
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Account Not Found'),
-              content: const Text('This email address is not registered in our system. Please check the email or sign up for a new account.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
+        debugPrint('[Auth] Forgot password error: ${e.runtimeType} -> $e');
+        final errStr = e.toString().toLowerCase();
+        if (errStr.contains('too-many-requests')) {
+          _showError(localizations.translate('reset_password_rate_limited'));
+        } else if (errStr.contains('network') || errStr.contains('unavailable') || errStr.contains('socket')) {
+          _showError(localizations.translate('reset_password_network_error'));
+        } else if (errStr.contains('invalid-email')) {
+          _showError(localizations.translate('invalid_email_error'));
         } else {
-          _showError(e.toString());
+          _showError(localizations.translate('reset_password_generic_error'));
         }
       }
     } finally {
@@ -164,10 +202,152 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     }
   }
 
+  String? _mapAuthErrorToMessage(
+    dynamic error,
+    AppLocalizations localizations, {
+    required bool isLogin,
+    bool isSocial = false,
+  }) {
+    if (error == null) return null;
+
+    // Developer logging: Log full technical error details without sensitive data like passwords
+    debugPrint('[Auth] Operation error (isLogin: $isLogin, isSocial: $isSocial): ${error.runtimeType} -> $error');
+
+    String code = '';
+    final rawText = error.toString().toLowerCase();
+
+    if (error is FirebaseAuthException) {
+      code = error.code.toLowerCase();
+    } else {
+      try {
+        final dynamic dyn = error;
+        if (dyn.code != null) {
+          code = dyn.code.toString().toLowerCase();
+        }
+      } catch (_) {}
+    }
+
+    if (code.isEmpty) {
+      final bracketMatch = RegExp(r'\[(?:firebase_auth/)?([a-zA-Z0-9_-]+)\]').firstMatch(rawText);
+      if (bracketMatch != null) {
+        code = bracketMatch.group(1)!.toLowerCase();
+      }
+    }
+
+    // Social login cancellation check (Google or Apple dismissed/cancelled by user)
+    if (isSocial) {
+      if (code == 'canceled' ||
+          code == 'sign_in_canceled' ||
+          code == 'popup_closed_by_user' ||
+          (code == 'unknown' && rawText.contains('canceled')) ||
+          rawText.contains('sign_in_canceled') ||
+          rawText.contains('user canceled') ||
+          rawText.contains('user cancelled') ||
+          rawText.contains('popup_closed_by_user') ||
+          rawText.contains('canceled') ||
+          rawText.contains('cancelled')) {
+        return null;
+      }
+    }
+
+    // 1. Account-enumeration-safe login error:
+    // For invalid-credential, user-not-found, wrong-password, malformed/expired credential and deleted-account login attempts
+    if (isLogin && (
+        code == 'invalid-credential' ||
+        code == 'user-not-found' ||
+        code == 'wrong-password' ||
+        code == 'user-deleted' ||
+        code == 'account-deleted' ||
+        rawText.contains('invalid-credential') ||
+        rawText.contains('user-not-found') ||
+        rawText.contains('wrong-password') ||
+        rawText.contains('user-deleted') ||
+        rawText.contains('account-deleted') ||
+        rawText.contains('malformed') ||
+        rawText.contains('expired') ||
+        rawText.contains('credential is incorrect') ||
+        rawText.contains('auth credential is incorrect')
+    )) {
+      return localizations.translate('auth_error_invalid_credentials');
+    }
+
+    // 2. Email already registered during sign-up
+    if (code == 'email-already-in-use' ||
+        code == 'account-exists-with-different-credential' ||
+        rawText.contains('email-already-in-use') ||
+        rawText.contains('email already in use') ||
+        rawText.contains('account-exists-with-different-credential')) {
+      return localizations.translate('auth_error_email_already_in_use');
+    }
+
+    // 3. Invalid email address
+    if (code == 'invalid-email' ||
+        rawText.contains('invalid-email') ||
+        rawText.contains('badly formatted')) {
+      return localizations.translate('auth_error_invalid_email');
+    }
+
+    // 4. Disabled account
+    if (code == 'user-disabled' || rawText.contains('user-disabled')) {
+      return localizations.translate('auth_error_user_disabled');
+    }
+
+    // 5. Too many login attempts
+    if (code == 'too-many-requests' || rawText.contains('too-many-requests')) {
+      return localizations.translate('auth_error_too_many_requests');
+    }
+
+    // 6. Weak password
+    if (code == 'weak-password' || rawText.contains('weak-password')) {
+      return localizations.translate('auth_error_weak_password');
+    }
+
+    // 7. Network / offline problem
+    if (code == 'network-request-failed' ||
+        code == 'network_error' ||
+        code == 'unavailable' ||
+        rawText.contains('network-request-failed') ||
+        rawText.contains('network') ||
+        rawText.contains('unavailable') ||
+        rawText.contains('socketexception') ||
+        rawText.contains('offline')) {
+      return localizations.translate('auth_error_network');
+    }
+
+    // Safety check for login: never reveal account existence
+    if (isLogin && (
+        code.contains('credential') ||
+        rawText.contains('credential') ||
+        rawText.contains('password') ||
+        rawText.contains('user')
+    )) {
+      return localizations.translate('auth_error_invalid_credentials');
+    }
+
+    // 8. Generic unexpected sign-in failure
+    return localizations.translate('auth_error_generic');
+  }
+
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
-    );
+    if (!mounted) return;
+    final localizations = AppLocalizations.of(context);
+    final isRtl = localizations?.isRtl ?? false;
+    final textDirection = isRtl ? TextDirection.rtl : TextDirection.ltr;
+    final textAlign = isRtl ? TextAlign.right : TextAlign.left;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            msg,
+            textAlign: textAlign,
+            textDirection: textDirection,
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override
@@ -185,32 +365,24 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 32),
-                // Premium logo header
+                // Brand logo header
                 Center(
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Image.asset(
-                      'assets/images/app_icon.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
+                  child: Image.asset(
+                    'assets/images/partwk_emblem.png',
+                    width: 130,
+                    height: 130,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
                           color: theme.colorScheme.primary,
-                          child: const Icon(Icons.auto_stories, color: Colors.white, size: 40),
-                        );
-                      },
-                    ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(Icons.auto_stories, color: Colors.white, size: 40),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -228,6 +400,8 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
+
+                _buildLanguageSelector(context, theme),
                 
                 // Form Fields
                 if (!_isLogin) ...[
@@ -263,20 +437,18 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 
                 // Forgot Password link
                 if (_isLogin)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: _forgotPassword,
-                        child: Text(
-                          localizations.translate('forgot_password'),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.secondary,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: TextButton(
+                      onPressed: _forgotPassword,
+                      child: Text(
+                        localizations.translate('forgot_password'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.secondary,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 
                 const SizedBox(height: 24),
@@ -350,8 +522,10 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 const SizedBox(height: 16),
                 
                 // Switch between Login and Register
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 4,
                   children: [
                     Text(
                       _isLogin 
@@ -359,7 +533,6 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                           : localizations.translate('already_have_account'),
                       style: theme.textTheme.bodyMedium,
                     ),
-                    const SizedBox(width: 4),
                     GestureDetector(
                       onTap: () {
                         setState(() {
@@ -367,7 +540,9 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                         });
                       },
                       child: Text(
-                        _isLogin ? 'Sign Up' : 'Login',
+                        _isLogin 
+                            ? localizations.translate('register') 
+                            : localizations.translate('login'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.secondary,
                           fontWeight: FontWeight.bold,
@@ -378,6 +553,57 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageSelector(BuildContext context, ThemeData theme) {
+    final languageState = Provider.of<AppLanguageState>(context);
+    final currentLang = languageState.locale.languageCode;
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.15)),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildLanguageTab(context, 'English', 'en', currentLang, theme, languageState),
+              _buildLanguageTab(context, 'کوردی', 'ku', currentLang, theme, languageState),
+              _buildLanguageTab(context, 'العربية', 'ar', currentLang, theme, languageState),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageTab(BuildContext context, String label, String code, String currentLang, ThemeData theme, AppLanguageState languageState) {
+    final isSelected = currentLang == code;
+    return GestureDetector(
+      onTap: () {
+        languageState.setLanguage(code);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.colorScheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: isSelected ? Colors.white : theme.textTheme.bodyMedium?.color,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ),

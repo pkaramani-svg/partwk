@@ -2,9 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:path_provider/path_provider.dart';
@@ -21,8 +26,53 @@ import 'models/book.dart';
 import 'features/book/book_details_screen.dart';
 import 'package:app_links/app_links.dart';
 
-void main() async {
+// Emulator use is intentionally opt-in at compile time and debug-only. A
+// release/profile artifact with this flag refuses to start rather than risking
+// a test backend configuration leaking into a distributed build.
+const _useFirebaseEmulators = bool.fromEnvironment('USE_FIREBASE_EMULATORS');
+const _firebaseEmulatorHost = String.fromEnvironment(
+  'FIREBASE_EMULATOR_HOST',
+  defaultValue: '10.0.2.2',
+);
+const _authEmulatorPort = int.fromEnvironment('FIREBASE_AUTH_EMULATOR_PORT', defaultValue: 19099);
+const _firestoreEmulatorPort = int.fromEnvironment('FIREBASE_FIRESTORE_EMULATOR_PORT', defaultValue: 18080);
+const _functionsEmulatorPort = int.fromEnvironment('FIREBASE_FUNCTIONS_EMULATOR_PORT', defaultValue: 5001);
+const _storageEmulatorPort = int.fromEnvironment('FIREBASE_STORAGE_EMULATOR_PORT', defaultValue: 19199);
+
+class _IsolatedHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = super.createHttpClient(context);
+    client.findProxy = (uri) => ['127.0.0.1', 'localhost', '10.0.2.2'].contains(uri.host)
+        ? 'DIRECT' : 'PROXY 127.0.0.1:9';
+    return client;
+  }
+}
+
+Future<void> _configureDebugFirebaseEmulators() async {
+  if (!_useFirebaseEmulators) return;
+  if (!kDebugMode) {
+    throw StateError('Firebase emulators are permitted only in debug builds.');
+  }
+  if (_firebaseEmulatorHost != '10.0.2.2' && _firebaseEmulatorHost != '127.0.0.1') {
+    throw StateError('Emulator host must be 10.0.2.2 or 127.0.0.1.');
+  }
+  if (Firebase.app().options.projectId != 'demo-partwk-text') {
+    throw StateError('The isolated demo Firebase project is not configured.');
+  }
+  for (final port in [_authEmulatorPort, _firestoreEmulatorPort, _functionsEmulatorPort, _storageEmulatorPort]) {
+    final socket = await Socket.connect(_firebaseEmulatorHost, port, timeout: const Duration(seconds: 2));
+    socket.destroy();
+  }
+  await FirebaseAuth.instance.useAuthEmulator(_firebaseEmulatorHost, _authEmulatorPort, automaticHostMapping: false);
+  FirebaseFirestore.instance.useFirestoreEmulator(_firebaseEmulatorHost, _firestoreEmulatorPort, automaticHostMapping: false);
+  FirebaseFunctions.instance.useFunctionsEmulator(_firebaseEmulatorHost, _functionsEmulatorPort, automaticHostMapping: false);
+  await FirebaseStorage.instance.useStorageEmulator(_firebaseEmulatorHost, _storageEmulatorPort, automaticHostMapping: false);
+}
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (_useFirebaseEmulators) HttpOverrides.global = _IsolatedHttpOverrides();
   
   // Wipe downloads once for clean testing
   try {
@@ -60,10 +110,18 @@ void main() async {
   
   try {
     await Firebase.initializeApp();
-    await NotificationService().init();
+    if (Firebase.app().options.projectId == 'demo-partwk-text' && !_useFirebaseEmulators) {
+      throw StateError('The isolated application requires USE_FIREBASE_EMULATORS=true.');
+    }
+    await _configureDebugFirebaseEmulators();
+    if (!_useFirebaseEmulators) await NotificationService().init();
     await AppLocator.init();
   } catch (e) {
     print("Initialization failed: $e");
+    if (_useFirebaseEmulators || (Firebase.apps.isNotEmpty && Firebase.app().options.projectId == 'demo-partwk-text')) {
+      runApp(MaterialApp(home: Scaffold(body: Center(child: Text('Isolated test configuration failed: $e')))));
+      return;
+    }
   }
 
   runApp(
@@ -241,11 +299,13 @@ class _PartwkAppState extends State<PartwkApp> {
       } else {
         bookId = uri.queryParameters['id'];
       }
-    } else if (uri.host.contains('partwk.com')) {
+    } else if (uri.host.contains('partwk-bd4ec.web.app') || uri.host.contains('partwk.com') || uri.host.contains('web.app')) {
       final segments = uri.pathSegments;
       final bookIndex = segments.indexOf('book');
       if (bookIndex != -1 && bookIndex + 1 < segments.length) {
         bookId = segments[bookIndex + 1];
+      } else {
+        bookId = uri.queryParameters['bookId'] ?? uri.queryParameters['id'];
       }
     }
 

@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
+import 'dart:math' as math;
 import 'package:dio/dio.dart' as dio_client;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/book.dart';
@@ -12,6 +14,7 @@ import '../../models/achievement.dart';
 import '../../services/download_service.dart';
 import 'database_service.dart';
 import 'network_guard.dart';
+import 'catalogue_cache_service.dart';
 
 class FirestoreDatabaseService extends DatabaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -39,6 +42,7 @@ class FirestoreDatabaseService extends DatabaseService {
   List<Achievement> get achievements => _achievements;
 
   Future<List<Map<String, dynamic>>> _fetchCollectionRest(String collectionName) async {
+    if (const bool.fromEnvironment('USE_FIREBASE_EMULATORS')) return [];
     final dio = dio_client.Dio();
     final projectId = "partwk-bd4ec";
     final url = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/$collectionName?pageSize=100";
@@ -102,16 +106,21 @@ class FirestoreDatabaseService extends DatabaseService {
       final snapshot = await _firestore.collection('books').get(
         GetOptions(source: hasInternet ? Source.serverAndCache : Source.cache),
       );
-      final firestoreBooks = snapshot.docs.map((doc) => Book.fromMap(doc.id, doc.data())).toList();
+      final firestoreBooks = snapshot.docs
+          .map((doc) => Book.fromMap(doc.id, doc.data()))
+          .where((book) => book.isPublished)
+          .toList();
 
-      // Merge with downloaded books to ensure they are always present
+      // Merge with downloaded books without overwriting full online entries
       final downloaded = await DownloadService().getDownloadedBooks();
       final Map<String, Book> merged = {};
       for (var b in firestoreBooks) {
         merged[b.id] = b;
       }
       for (var b in downloaded) {
-        merged[b.id] = b;
+        if (!merged.containsKey(b.id)) {
+          merged[b.id] = b;
+        }
       }
       
       // Deduplicate by English title to prevent duplicate cached entries
@@ -121,6 +130,11 @@ class FirestoreDatabaseService extends DatabaseService {
         uniqueByTitle[titleEn] = b;
       }
       _books = uniqueByTitle.values.toList();
+      
+      // Quietly save catalogue metadata & covers cache in background
+      if (firestoreBooks.isNotEmpty) {
+        CatalogueCacheService.saveCatalogueCache(firestoreBooks, _categories);
+      }
       return books;
     } catch (e) {
       print('Error fetching books: $e');
@@ -142,7 +156,9 @@ class FirestoreDatabaseService extends DatabaseService {
               merged[b.id] = b;
             }
             for (var b in downloaded) {
-              merged[b.id] = b;
+              if (!merged.containsKey(b.id)) {
+                merged[b.id] = b;
+              }
             }
             
             final Map<String, Book> uniqueByTitle = {};
@@ -151,11 +167,30 @@ class FirestoreDatabaseService extends DatabaseService {
               uniqueByTitle[titleEn] = b;
             }
             _books = uniqueByTitle.values.toList();
+            if (restBooks.isNotEmpty) {
+              CatalogueCacheService.saveCatalogueCache(restBooks, _categories);
+            }
             return books;
           }
         } catch (restEx) {
           print('REST fallback for books failed: $restEx');
         }
+      }
+
+      // Try loading catalogue-only cache when offline
+      try {
+        final cached = await CatalogueCacheService.loadCatalogueBooks();
+        if (cached.isNotEmpty) {
+          final Map<String, Book> uniqueByTitle = {};
+          for (var b in cached) {
+            final titleEn = b.title['en']?.toLowerCase() ?? b.id;
+            uniqueByTitle[titleEn] = b;
+          }
+          _books = uniqueByTitle.values.toList();
+          return books;
+        }
+      } catch (ex) {
+        print('Error loading catalogue cache books: $ex');
       }
 
       try {
@@ -204,6 +239,15 @@ class FirestoreDatabaseService extends DatabaseService {
         }
       }
       
+      // Fallback to cached catalogue categories
+      try {
+        final cachedCats = await CatalogueCacheService.loadCatalogueCategories();
+        if (cachedCats.isNotEmpty) {
+          _categories = cachedCats;
+          return _categories;
+        }
+      } catch (_) {}
+
       return [];
     }
   }
@@ -557,5 +601,240 @@ class FirestoreDatabaseService extends DatabaseService {
   @override
   Future<void> updateTranslations(String key, String enVal, String kuVal, String arVal) async {
     // Implement global translation dictionary update via Firestore
+  }
+
+  @override
+  Future<String?> getDefinition(String word, String langCode) async {
+    try {
+      final sanitized = word.trim().toLowerCase().replaceAll(RegExp(r'[^\w\s\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u0720-\u072F]'), '');
+      if (sanitized.isEmpty) return null;
+
+      // 1. Try raw word lookup
+      final docId = '${langCode}_$sanitized';
+      final doc = await _firestore.collection('dictionaries').doc(docId).get();
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data.containsKey('definition_ckb')) {
+          return jsonEncode({
+            'is_structured': true,
+            'word': data['word'] ?? word,
+            'dialect_tag': data['dialect_tag'] ?? 'Sorani',
+            'part_of_speech': data['part_of_speech'] ?? 'noun',
+            'definition_ckb': data['definition_ckb'] ?? data['definition'] ?? '',
+            'synonyms': data['synonyms'] ?? [],
+          });
+        }
+        return data?['definition'] as String?;
+      }
+
+      // 2. Try stemmed word lookup for Kurdish/Arabic to resolve inflection suffixes
+      if (langCode == 'ku' || langCode == 'ar') {
+        final stemmed = langCode == 'ku' ? _stemKurdish(sanitized) : _stemArabic(sanitized);
+        if (stemmed != sanitized) {
+          final stemmedDocId = '${langCode}_$stemmed';
+          final stemmedDoc = await _firestore.collection('dictionaries').doc(stemmedDocId).get();
+          if (stemmedDoc.exists) {
+            final data = stemmedDoc.data();
+            if (data != null && data.containsKey('definition_ckb')) {
+              return jsonEncode({
+                'is_structured': true,
+                'word': data['word'] ?? stemmed,
+                'dialect_tag': data['dialect_tag'] ?? 'Sorani',
+                'part_of_speech': data['part_of_speech'] ?? 'noun',
+                'definition_ckb': data['definition_ckb'] ?? data['definition'] ?? '',
+                'synonyms': data['synonyms'] ?? [],
+              });
+            }
+            return data?['definition'] as String?;
+          }
+        }
+      }
+
+      // Fallback English free dictionary API
+      if (langCode == 'en') {
+        try {
+          final dio = dio_client.Dio();
+          final response = await dio.get('https://api.dictionaryapi.dev/api/v2/entries/en/$sanitized');
+          if (response.statusCode == 200 && response.data is List && (response.data as List).isNotEmpty) {
+            final firstEntry = (response.data as List).first;
+            final meanings = firstEntry['meanings'] as List?;
+            if (meanings != null && meanings.isNotEmpty) {
+              final firstMeaning = meanings.first;
+              final definitions = firstMeaning['definitions'] as List?;
+              if (definitions != null && definitions.isNotEmpty) {
+                final defText = definitions.first['definition'] as String?;
+                if (defText != null && defText.isNotEmpty) {
+                  return defText;
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Fallback Kurdish/Arabic dictionary via MyMemory API translation to English -> English define -> Translate back to Kurdish/Arabic
+      if (langCode == 'ku' || langCode == 'ar') {
+        try {
+          final dio = dio_client.Dio();
+          final srcLang = langCode == 'ku' ? 'ckb' : 'ar';
+          final transRes = await dio.get(
+            'https://api.mymemory.translated.net/get',
+            queryParameters: {
+              'q': sanitized,
+              'langpair': '$srcLang|en',
+            },
+          );
+          if (transRes.statusCode == 200) {
+            final translatedText = transRes.data['responseData']?['translatedText'] as String?;
+            if (translatedText != null && translatedText.isNotEmpty && translatedText.toLowerCase() != sanitized) {
+              final englishDef = await getDefinition(translatedText, 'en');
+              if (englishDef != null && englishDef.isNotEmpty) {
+                final backTransRes = await dio.get(
+                  'https://api.mymemory.translated.net/get',
+                  queryParameters: {
+                    'q': englishDef,
+                    'langpair': 'en|$srcLang',
+                  },
+                );
+                if (backTransRes.statusCode == 200) {
+                  final translatedDef = backTransRes.data['responseData']?['translatedText'] as String?;
+                  if (translatedDef != null && translatedDef.isNotEmpty) {
+                    return translatedDef;
+                  }
+                }
+                return englishDef;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      return null;
+    } catch (e) {
+      print('Error fetching definition in Firestore: $e');
+      return null;
+    }
+  }
+
+  @override
+  Future<List<Book>> fetchTrendingBooks(List<Book> allBooks) async {
+    try {
+      final hasInternet = await NetworkGuard.hasConnection();
+      if (!hasInternet) throw Exception("Offline fallback");
+
+      final snapshot = await _firestore.collection('users').get();
+      final Map<String, int> bookCounts = {};
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final saved = List<String>.from(data['savedBooks'] ?? []);
+        final completed = List<String>.from(data['completedBooks'] ?? []);
+        final liked = List<String>.from(data['likedBooks'] ?? []);
+        
+        final readingProgressData = data['readingProgress'];
+        final Iterable<String> reading = readingProgressData is Map 
+            ? readingProgressData.keys.map((e) => e.toString()) 
+            : const [];
+
+        final allInteracted = {...saved, ...completed, ...liked, ...reading};
+        for (final bookId in allInteracted) {
+          bookCounts[bookId] = (bookCounts[bookId] ?? 0) + 1;
+        }
+      }
+
+      if (bookCounts.isEmpty) {
+        return _fallbackTrending(allBooks);
+      }
+
+      final sortedBooks = List<Book>.from(allBooks)
+        ..sort((a, b) {
+          final countA = bookCounts[a.id] ?? 0;
+          final countB = bookCounts[b.id] ?? 0;
+          if (countA != countB) {
+            return countB.compareTo(countA);
+          }
+          return b.createdAt.compareTo(a.createdAt);
+        });
+
+      return sortedBooks;
+    } catch (e) {
+      print("Error fetching trending books: $e");
+      return _fallbackTrending(allBooks);
+    }
+  }
+
+  List<Book> _fallbackTrending(List<Book> allBooks) {
+    final trendingCandidates = allBooks.where((b) =>
+      b.tags.contains('bestseller') ||
+      b.tags.contains('trending') ||
+      b.tags.contains('popular')
+    ).toList();
+
+    if (trendingCandidates.isEmpty) {
+      trendingCandidates.addAll(allBooks);
+    }
+
+    final daysSinceEpoch = DateTime.now().difference(DateTime(2024, 1, 1)).inDays;
+    final math.Random r = math.Random(daysSinceEpoch + 500);
+    final listCopy = List<Book>.from(trendingCandidates);
+    listCopy.shuffle(r);
+    return listCopy;
+  }
+
+  String _stemKurdish(String word) {
+    var stemmed = word.trim().toLowerCase();
+    // Strip postpositions/prepositions
+    if (stemmed.endsWith('دا') && stemmed.length > 3) {
+      stemmed = stemmed.substring(0, stemmed.length - 2);
+    }
+    if (stemmed.endsWith('یش') && stemmed.length > 3) {
+      stemmed = stemmed.substring(0, stemmed.length - 2);
+    }
+    if (stemmed.endsWith('ش') && stemmed.length > 2) {
+      stemmed = stemmed.substring(0, stemmed.length - 1);
+    }
+
+    // Strip plural/definite articles
+    if (stemmed.endsWith('ەکان') && stemmed.length > 5) {
+      stemmed = stemmed.substring(0, stemmed.length - 4);
+    }
+    if (stemmed.endsWith('ەکە') && stemmed.length > 4) {
+      stemmed = stemmed.substring(0, stemmed.length - 3);
+    }
+    if (stemmed.endsWith('ان') && stemmed.length > 3) {
+      stemmed = stemmed.substring(0, stemmed.length - 2);
+    }
+    if (stemmed.endsWith('ێک') && stemmed.length > 4) {
+      stemmed = stemmed.substring(0, stemmed.length - 3);
+    }
+
+    // Strip possessive suffixes
+    if ((stemmed.endsWith('مان') || stemmed.endsWith('تان') || stemmed.endsWith('یان')) && stemmed.length > 4) {
+      stemmed = stemmed.substring(0, stemmed.length - 3);
+    }
+    if ((stemmed.endsWith('م') || stemmed.endsWith('ت') || stemmed.endsWith('ی')) && stemmed.length > 3) {
+      stemmed = stemmed.substring(0, stemmed.length - 1);
+    }
+    return stemmed;
+  }
+
+  String _stemArabic(String word) {
+    var stemmed = word.trim().toLowerCase();
+    if (stemmed.startsWith('ال') && stemmed.length > 3) {
+      stemmed = stemmed.substring(2);
+    }
+    if (stemmed.startsWith('و') && stemmed.length > 3) {
+      stemmed = stemmed.substring(1);
+    }
+    if (stemmed.startsWith('ب') && stemmed.length > 3) {
+      stemmed = stemmed.substring(1);
+    }
+    if ((stemmed.endsWith('na') || stemmed.endsWith('نا') || stemmed.endsWith('هم') || stemmed.endsWith('كم')) && stemmed.length > 4) {
+      stemmed = stemmed.substring(0, stemmed.length - 2);
+    }
+    if ((stemmed.endsWith('ات') || stemmed.endsWith('ون') || stemmed.endsWith('ين')) && stemmed.length > 4) {
+      stemmed = stemmed.substring(0, stemmed.length - 2);
+    }
+    return stemmed;
   }
 }

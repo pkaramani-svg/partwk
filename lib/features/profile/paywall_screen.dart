@@ -72,14 +72,19 @@ class _PaywallScreenState extends State<PaywallScreen> {
       return;
     }
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    await AppLocator.auth.upgradeToPremium();
+    try {
+      await AppLocator.purchases.buyAnnual();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
     if (mounted) {
       setState(() => _isLoading = false);
       final localizations = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(localizations.translate('welcome_premium')),
+          content: const Text('Your purchase is being verified securely.'),
           backgroundColor: Colors.teal,
         ),
       );
@@ -93,8 +98,13 @@ class _PaywallScreenState extends State<PaywallScreen> {
       return;
     }
     setState(() => _isRestoring = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    await AppLocator.auth.upgradeToPremium();
+    try {
+      await AppLocator.purchases.restore();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) setState(() => _isRestoring = false);
+      return;
+    }
     if (mounted) {
       setState(() => _isRestoring = false);
       final localizations = AppLocalizations.of(context)!;

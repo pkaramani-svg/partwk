@@ -45,6 +45,12 @@ class TestAuthService extends AuthService {
   Future<void> initialize() async {}
 
   @override
+  Future<void> updateProfilePicture(String url) async {
+    _currentUser = _currentUser?.copyWith(profilePictureUrl: url);
+    notifyListeners();
+  }
+
+  @override
   Future<void> signInWithEmailAndPassword(String email, String password) async {}
 
   @override
@@ -138,7 +144,7 @@ class TestAuthService extends AuthService {
   @override
   Future<void> upgradeToPremium() async {}
   @override
-  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false}) async {}
+  Future<void> updateListeningProgress(String bookId, String langCode, int chapterIndex, int positionSeconds, {int accumulatedSecondHalfSeconds = 0, bool localOnly = false, String? expectedUserId}) async {}
   @override
   Future<void> recordActivity() async {}
   @override
@@ -196,11 +202,20 @@ class TestDatabaseService extends DatabaseService {
   Future<void> addQuiz(Quiz quiz) async {}
   @override
   Future<void> updateTranslations(String key, String enVal, String kuVal, String arVal) async {}
+  @override
+  Future<String?> getDefinition(String word, String langCode) async => null;
+  @override
+  Future<List<Book>> fetchTrendingBooks(List<Book> allBooks) async => allBooks;
 }
 
 class TestDownloadService implements DownloadService {
   @override
-  Future<bool> isBookDownloaded(String bookId) async {
+  Future<bool> isBookDownloaded(String bookId, {String? languageCode}) async {
+    return false;
+  }
+
+  @override
+  Future<bool> isEditionDownloaded(String bookId, String languageCode) async {
     return false;
   }
 
@@ -215,7 +230,12 @@ class TestDownloadService implements DownloadService {
   }
 
   @override
-  Future<String?> getLocalCoverUri(String bookId) async {
+  Future<List<DownloadedEdition>> getDownloadedEditions() async {
+    return [];
+  }
+
+  @override
+  Future<String?> getLocalCoverUri(String bookId, [String? languageCode]) async {
     return null;
   }
 
@@ -225,7 +245,7 @@ class TestDownloadService implements DownloadService {
   }
 
   @override
-  Future<void> removeDownload(String bookId) async {}
+  Future<void> removeDownload(String bookId, {String? languageCode}) async {}
 }
 
 void main() {
@@ -607,7 +627,7 @@ void main() {
         id: 'book-456',
         title: {'en': 'Widget Test Summary'},
         author: {'en': 'Test Author'},
-        coverImageUrl: 'local:cover.jpg',
+        coverImageUrl: '',
         categoryIds: [],
         tags: [],
         description: {'en': 'A widget test description'},
@@ -637,7 +657,7 @@ void main() {
         likedBooks: [],
         listeningProgress: {},
         readingProgress: {},
-        subscriptionStatus: 'free',
+        subscriptionStatus: 'premium',
         streakCount: 0,
         lastActiveDate: '',
         familyMembers: [],

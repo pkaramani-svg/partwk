@@ -8,6 +8,22 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
     <title>Partwk Admin Dashboard</title>
+    <script>
+      (function() {
+        var path = window.location.pathname;
+        if (path.indexOf('/book/') !== -1 || path.indexOf('/share') !== -1) {
+          var ua = navigator.userAgent || navigator.vendor || window.opera;
+          var isAndroid = /android/i.test(ua);
+          var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+          
+          if (isAndroid) {
+            window.location.href = "https://play.google.com/store/apps/details?id=com.pkgames.partwk";
+          } else if (isIOS) {
+            window.location.href = "https://apps.apple.com/search?term=partwk";
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

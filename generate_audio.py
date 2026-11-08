@@ -225,6 +225,7 @@ def main():
         # Configure Generation Content
         config = types.GenerateContentConfig(
             response_modalities=["AUDIO"],
+            system_instruction=system_instruction,
             speech_config=types.SpeechConfig(
                 language_code=lang_code,
                 voice_config=types.VoiceConfig(

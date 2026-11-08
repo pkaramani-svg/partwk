@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'service_locator.dart';
 import 'streak_tracker.dart';
 import 'download_manager.dart';
+import 'network_guard.dart';
 import '../../services/download_service.dart';
 
 abstract class AudioService extends ChangeNotifier {
@@ -23,6 +24,7 @@ abstract class AudioService extends ChangeNotifier {
 
   Duration? get sleepTimerRemaining;
 
+  bool get isCurrentBookPremium;
   bool get isGuestRestricted;
   void clearGuestRestriction();
 
@@ -30,7 +32,7 @@ abstract class AudioService extends ChangeNotifier {
   Future<void> clearState();
   void play(String bookId, String langCode, String bookTitle, String coverUrl,
       String globalAudioUrl, List<Map<String, dynamic>> bookChapters,
-      {int startIndex = 0, int startPosition = 0, int bookDurationSecs = 0});
+      {int startIndex = 0, int startPosition = 0, int bookDurationSecs = 0, bool isPremium = false});
   void pause();
   void resume();
   void stop();
@@ -59,27 +61,36 @@ class RealAudioService extends AudioService {
   List<Map<String, dynamic>> _chapters = [];
   int _bookDurationSecs = 0;
   int _accumulatedSecondHalfSeconds = 0;
+  String? _playbackOwnerId;
+  int _playbackGeneration = 0;
+  final List<StreamSubscription<dynamic>> _playerSubscriptions = [];
 
   Timer? _sleepTimer;
   DateTime? _sleepTimerEndTime;
   bool _isGuestRestricted = false;
+  bool _isCurrentBookPremium = false;
   DateTime? _lastPlayTime;
   DateTime _lastSaveTime = DateTime.now();
 
   @override
   Future<void> init() async {
     try {
+      final ownerId = AppLocator.auth.currentUser?.id;
+      final generation = _playbackGeneration;
       final prefs = await SharedPreferences.getInstance();
-      final userId = AppLocator.auth.currentUser?.id ?? 'guest';
+      if (generation != _playbackGeneration || AppLocator.auth.currentUser?.id != ownerId) return;
+      final userId = ownerId ?? 'guest';
       final prefix = 'audio_${userId}_';
       
       _currentBookId = prefs.getString('${prefix}book_id');
       if (_currentBookId != null) {
+        _playbackOwnerId = ownerId;
         _currentLangCode = prefs.getString('${prefix}lang_code');
         _currentBookTitle = prefs.getString('${prefix}book_title');
         _currentCoverUrl = prefs.getString('${prefix}cover_url');
         _globalAudioUrl = prefs.getString('${prefix}global_url');
         _bookDurationSecs = prefs.getInt('${prefix}book_duration') ?? 0;
+        _isCurrentBookPremium = prefs.getBool('${prefix}is_premium') ?? false;
         _currentChapterIndex = prefs.getInt('${prefix}chapter_index') ?? 0;
         int savedPos = prefs.getInt('${prefix}position_secs') ?? 0;
 
@@ -100,6 +111,8 @@ class RealAudioService extends AudioService {
   }
 
   Future<void> _loadPlaylistSilently(int savedPos) async {
+    final generation = _playbackGeneration;
+    final ownerId = _playbackOwnerId;
     try {
       final List<AudioSource> playlistChildren = [];
       for (int idx = 0; idx < _chapters.length; idx++) {
@@ -120,14 +133,21 @@ class RealAudioService extends AudioService {
               : null,
         );
 
-        final isLocal = DownloadService.isBookDownloadedSync(_currentBookId!) &&
-            DownloadService.getLocalAudioFileSync(_currentBookId!, _currentLangCode ?? 'en').existsSync();
+        final lang = _currentLangCode ?? 'en';
+        final isLocal = DownloadService.isEditionDownloadedSync(_currentBookId!, lang) &&
+            DownloadService.getLocalAudioFileIfExists(_currentBookId!, lang) != null;
 
-        if (isLocal || url.startsWith('file://')) {
+        if (url.startsWith('http')) {
+          if (const bool.fromEnvironment('USE_FIREBASE_EMULATORS') &&
+              !['10.0.2.2', '127.0.0.1', 'localhost'].contains(Uri.parse(url).host)) {
+            throw StateError('External audio is disabled in isolated tests.');
+          }
+          playlistChildren.add(AudioSource.uri(Uri.parse(url), tag: mediaItem));
+        } else if (isLocal || url.startsWith('file://')) {
           try {
             final source = await DownloadManager.loadAudioSource(
               _currentBookId!,
-              _currentLangCode ?? 'en',
+              lang,
               mediaItem,
             );
             playlistChildren.add(source);
@@ -137,8 +157,6 @@ class RealAudioService extends AudioService {
               tag: mediaItem,
             ));
           }
-        } else if (url.startsWith('http')) {
-          playlistChildren.add(AudioSource.uri(Uri.parse(url), tag: mediaItem));
         } else {
           playlistChildren.add(AudioSource.uri(
               Uri.parse('asset:///assets/audio/sample.wav'),
@@ -147,42 +165,63 @@ class RealAudioService extends AudioService {
       }
 
       final playlist = ConcatenatingAudioSource(children: playlistChildren);
+      if (generation != _playbackGeneration || ownerId != AppLocator.auth.currentUser?.id) return;
       await _player.setAudioSource(playlist,
           initialIndex: _currentChapterIndex,
           initialPosition: Duration(seconds: savedPos));
-    } catch (e) {}
+    } catch (e, stack) {
+      debugPrint('Error restoring audio playlist: $e');
+      debugPrintStack(stackTrace: stack);
+    }
   }
 
   Future<void> _saveState() async {
-    if (_currentBookId == null) return;
+    final bookId = _currentBookId;
+    final ownerId = _playbackOwnerId;
+    final generation = _playbackGeneration;
+    if (bookId == null || ownerId == null || AppLocator.auth.currentUser?.id != ownerId) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final userId = AppLocator.auth.currentUser?.id ?? 'guest';
-      final prefix = 'audio_${userId}_';
+      if (_playbackGeneration != generation || _playbackOwnerId != ownerId || AppLocator.auth.currentUser?.id != ownerId) return;
+      final prefix = 'audio_${ownerId}_';
       
-      prefs.setString('${prefix}book_id', _currentBookId!);
+      prefs.setString('${prefix}book_id', bookId);
       prefs.setString('${prefix}lang_code', _currentLangCode ?? 'en');
       prefs.setString('${prefix}book_title', _currentBookTitle ?? '');
       prefs.setString('${prefix}cover_url', _currentCoverUrl ?? '');
       prefs.setString('${prefix}global_url', _globalAudioUrl ?? '');
       prefs.setInt('${prefix}book_duration', _bookDurationSecs);
+      prefs.setBool('${prefix}is_premium', _isCurrentBookPremium);
       prefs.setInt('${prefix}chapter_index', _currentChapterIndex);
       prefs.setInt('${prefix}position_secs', _position.inSeconds);
       prefs.setString('${prefix}chapters', jsonEncode(_chapters));
 
       final lang = _currentLangCode ?? 'en';
       await AppLocator.auth.updateListeningProgress(
-        _currentBookId!,
+        bookId,
         lang,
         _currentChapterIndex,
         _position.inSeconds,
         accumulatedSecondHalfSeconds: _accumulatedSecondHalfSeconds,
         localOnly: true,
+        expectedUserId: ownerId,
       );
-    } catch (e) {}
+    } catch (e, stack) {
+      debugPrint('Error saving audio state: $e');
+      debugPrintStack(stackTrace: stack);
+    }
   }
 
   Future<void> clearState() async {
+    final ownerId = _playbackOwnerId;
+    final bookId = _currentBookId;
+    final language = _currentLangCode;
+    if (ownerId != null && ownerId == AppLocator.auth.currentUser?.id && bookId != null && language != null) {
+      await AppLocator.auth.updateListeningProgress(bookId, language, _currentChapterIndex, _position.inSeconds,
+          accumulatedSecondHalfSeconds: _accumulatedSecondHalfSeconds, expectedUserId: ownerId);
+    }
+    _playbackGeneration++;
+    _playbackOwnerId = null;
     await _player.stop();
     _currentBookId = null;
     _currentLangCode = null;
@@ -190,6 +229,7 @@ class RealAudioService extends AudioService {
     _currentCoverUrl = null;
     _globalAudioUrl = null;
     _bookDurationSecs = 0;
+    _isCurrentBookPremium = false;
     _currentChapterIndex = 0;
     _position = Duration.zero;
     _chapters = [];
@@ -198,10 +238,11 @@ class RealAudioService extends AudioService {
   }
 
   RealAudioService() {
-    _player.playerStateStream.listen((state) {
+    _playerSubscriptions.add(_player.playerStateStream.listen((state) {
       _isPlaying =
           state.playing && state.processingState != ProcessingState.completed;
-      if (state.processingState == ProcessingState.completed) {
+      if (state.processingState == ProcessingState.completed && _playbackOwnerId != null &&
+          _playbackOwnerId == AppLocator.auth.currentUser?.id) {
         _recordLearningTime();
         if (_currentChapterIndex < _chapters.length - 1) {
           if (_currentBookId != null) {
@@ -222,17 +263,18 @@ class RealAudioService extends AudioService {
           stop();
         }
 
-        // If guest finishes the allowed chapters, trigger the popup
-        if (AppLocator.auth.isGuest &&
+        // If guest finishes the allowed chapters on a premium book, trigger the popup
+        if (_isCurrentBookPremium &&
+            AppLocator.auth.isGuest &&
             _currentChapterIndex == 1 &&
             _chapters.length > 2) {
           _isGuestRestricted = true;
         }
       }
       notifyListeners();
-    });
+    }));
 
-    _player.positionStream.listen((pos) {
+    _playerSubscriptions.add(_player.positionStream.listen((pos) {
       _position = pos;
 
       if (DateTime.now().difference(_lastSaveTime).inSeconds > 5) {
@@ -251,20 +293,20 @@ class RealAudioService extends AudioService {
       } else {
         notifyListeners();
       }
-    });
+    }));
 
-    _player.durationStream.listen((dur) {
+    _playerSubscriptions.add(_player.durationStream.listen((dur) {
       _duration = dur ?? Duration.zero;
       notifyListeners();
-    });
+    }));
 
-    _player.currentIndexStream.listen((index) {
+    _playerSubscriptions.add(_player.currentIndexStream.listen((index) {
       if (index != null && index != _currentChapterIndex) {
         _currentChapterIndex = index;
         _saveState();
         notifyListeners();
       }
-    });
+    }));
   }
 
   @override
@@ -297,6 +339,9 @@ class RealAudioService extends AudioService {
   }
 
   @override
+  bool get isCurrentBookPremium => _isCurrentBookPremium;
+
+  @override
   bool get isGuestRestricted => _isGuestRestricted;
 
   @override
@@ -310,8 +355,10 @@ class RealAudioService extends AudioService {
       String globalAudioUrl, List<Map<String, dynamic>> bookChapters,
       {int startIndex = 0,
       int startPosition = 0,
-      int bookDurationSecs = 0}) async {
-    if (AppLocator.auth.isGuest && startIndex >= 2) {
+      int bookDurationSecs = 0,
+      bool isPremium = false}) async {
+    _isCurrentBookPremium = isPremium;
+    if (_isCurrentBookPremium && AppLocator.auth.isGuest && startIndex >= 2) {
       _isGuestRestricted = true;
       notifyListeners();
       return;
@@ -331,14 +378,16 @@ class RealAudioService extends AudioService {
       return;
     }
 
-    if (_currentBookId != null && _currentLangCode != null) {
+    if (_playbackOwnerId != null && _playbackOwnerId == AppLocator.auth.currentUser?.id && _currentBookId != null && _currentLangCode != null) {
       // Save progress before switching
       AppLocator.auth.updateListeningProgress(_currentBookId!,
           _currentLangCode!, _currentChapterIndex, _position.inSeconds,
-          accumulatedSecondHalfSeconds: _accumulatedSecondHalfSeconds);
+          accumulatedSecondHalfSeconds: _accumulatedSecondHalfSeconds, expectedUserId: _playbackOwnerId);
     }
 
     stop();
+    _playbackOwnerId = AppLocator.auth.currentUser?.id;
+    final generation = _playbackGeneration;
     _currentBookId = bookId;
     _currentLangCode = langCode;
     _currentBookTitle = bookTitle;
@@ -386,9 +435,9 @@ class RealAudioService extends AudioService {
         // Fallback for testing empty books
         await _player.setAsset('assets/audio/sample.wav');
       } else {
-        // Slice playlist if guest
+        // Slice playlist if guest on a premium book
         List<Map<String, dynamic>> playableChapters = _chapters;
-        if (AppLocator.auth.isGuest && _chapters.length > 2) {
+        if (_isCurrentBookPremium && AppLocator.auth.isGuest && _chapters.length > 2) {
           playableChapters = _chapters.sublist(0, 2);
         }
 
@@ -411,10 +460,11 @@ class RealAudioService extends AudioService {
             artUri: coverUrl.isNotEmpty ? Uri.parse(coverUrl) : null,
           );
 
-          final isLocal = DownloadService.isBookDownloadedSync(bookId) &&
-              DownloadService.getLocalAudioFileSync(bookId, langCode).existsSync();
+          final isLocal = DownloadService.isEditionDownloadedSync(bookId, langCode) &&
+              DownloadService.getLocalAudioFileIfExists(bookId, langCode) != null;
+          final hasNet = await NetworkGuard.hasConnection();
 
-          if (isLocal || url.startsWith('file://')) {
+          if (isLocal && (!hasNet || url.isEmpty || url.startsWith('file://'))) {
             try {
               final source = await DownloadManager.loadAudioSource(
                 bookId,
@@ -427,7 +477,18 @@ class RealAudioService extends AudioService {
               rethrow;
             }
           } else if (url.startsWith('http')) {
+            if (const bool.fromEnvironment('USE_FIREBASE_EMULATORS') &&
+                !['10.0.2.2', '127.0.0.1', 'localhost'].contains(Uri.parse(url).host)) {
+              throw StateError('External audio is disabled in isolated tests.');
+            }
             playlistChildren.add(AudioSource.uri(Uri.parse(url), tag: mediaItem));
+          } else if (isLocal) {
+            final source = await DownloadManager.loadAudioSource(
+              bookId,
+              langCode,
+              mediaItem,
+            );
+            playlistChildren.add(source);
           } else {
             playlistChildren.add(AudioSource.uri(
                 Uri.parse('asset:///assets/audio/sample.wav'),
@@ -437,11 +498,14 @@ class RealAudioService extends AudioService {
 
         final playlist = ConcatenatingAudioSource(children: playlistChildren);
 
+        if (_playbackGeneration != generation || _playbackOwnerId != AppLocator.auth.currentUser?.id) return;
         await _player.setAudioSource(playlist,
             initialIndex: startChap, initialPosition: startPos);
       }
 
+      if (_playbackGeneration != generation || _playbackOwnerId != AppLocator.auth.currentUser?.id) return;
       await _player.setSpeed(_speed);
+      if (_playbackGeneration != generation || _playbackOwnerId != AppLocator.auth.currentUser?.id) return;
       _player.play();
       _lastPlayTime = DateTime.now();
     } catch (e) {
@@ -452,7 +516,7 @@ class RealAudioService extends AudioService {
   }
 
   void _recordLearningTime() {
-    if (_lastPlayTime != null) {
+    if (_lastPlayTime != null && _playbackOwnerId != null && _playbackOwnerId == AppLocator.auth.currentUser?.id) {
       final diff = DateTime.now().difference(_lastPlayTime!);
       AppLocator.auth.addLearningTime(diff.inSeconds);
 
@@ -464,16 +528,17 @@ class RealAudioService extends AudioService {
 
       _lastPlayTime = null;
     }
+    if (_playbackOwnerId != AppLocator.auth.currentUser?.id) _lastPlayTime = null;
   }
 
   @override
   void pause() {
     _player.pause();
     _recordLearningTime();
-    if (_currentBookId != null && _currentLangCode != null) {
+    if (_playbackOwnerId != null && _playbackOwnerId == AppLocator.auth.currentUser?.id && _currentBookId != null && _currentLangCode != null) {
       AppLocator.auth.updateListeningProgress(_currentBookId!,
           _currentLangCode!, _currentChapterIndex, _position.inSeconds,
-          accumulatedSecondHalfSeconds: _accumulatedSecondHalfSeconds);
+          accumulatedSecondHalfSeconds: _accumulatedSecondHalfSeconds, expectedUserId: _playbackOwnerId);
     }
   }
 
@@ -486,10 +551,12 @@ class RealAudioService extends AudioService {
   @override
   void stop() {
     _recordLearningTime();
-    if (_currentBookId != null && _currentLangCode != null) {
+    if (_playbackOwnerId != null && _playbackOwnerId == AppLocator.auth.currentUser?.id && _currentBookId != null && _currentLangCode != null) {
       AppLocator.auth.updateListeningProgress(_currentBookId!,
-          _currentLangCode!, _currentChapterIndex, _position.inSeconds);
+          _currentLangCode!, _currentChapterIndex, _position.inSeconds, expectedUserId: _playbackOwnerId);
     }
+    _playbackGeneration++;
+    _playbackOwnerId = null;
     _player.stop();
     _currentBookId = null;
     _currentLangCode = null;
@@ -516,7 +583,7 @@ class RealAudioService extends AudioService {
   @override
   void nextChapter() {
     int nextIndex = _currentChapterIndex + 1;
-    if (AppLocator.auth.isGuest && nextIndex >= 2) {
+    if (_isCurrentBookPremium && AppLocator.auth.isGuest && nextIndex >= 2) {
       _isGuestRestricted = true;
       notifyListeners();
       return;
@@ -558,7 +625,10 @@ class RealAudioService extends AudioService {
   @override
   void dispose() {
     _sleepTimer?.cancel();
-    _player.dispose();
+    for (final subscription in _playerSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    unawaited(_player.dispose());
     super.dispose();
   }
 

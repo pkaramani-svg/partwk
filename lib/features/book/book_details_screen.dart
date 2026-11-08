@@ -10,12 +10,15 @@ import '../../services/download_service.dart';
 import '../../core/services/download_manager.dart';
 import '../../core/services/licence_manager.dart';
 import '../../core/services/network_guard.dart';
+import '../../core/services/protected_text_service.dart';
+import '../library/downloads_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class BookDetailsScreen extends StatefulWidget {
   final String bookId;
-  const BookDetailsScreen({Key? key, required this.bookId}) : super(key: key);
+  final String? initialLanguageCode;
+  const BookDetailsScreen({Key? key, required this.bookId, this.initialLanguageCode}) : super(key: key);
 
   @override
   State<BookDetailsScreen> createState() => _BookDetailsScreenState();
@@ -64,21 +67,24 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
         }
       }
 
-      final isDownloaded = await DownloadService().isBookDownloaded(widget.bookId);
+      final loc = AppLocalizations.of(context);
+      final langCode = widget.initialLanguageCode ?? loc?.locale.languageCode ?? 'en';
+      final isDownloaded = await DownloadService().isBookDownloaded(widget.bookId, languageCode: langCode);
       bool isLicenceValid = false;
       bool isLicenceExpired = false;
       if (isDownloaded) {
-        isLicenceValid = await LicenceManager.isLicenceValid(widget.bookId);
-        final licence = await LicenceManager.loadLicence(widget.bookId);
+        isLicenceValid = await LicenceManager.isLicenceValid(widget.bookId, languageCode: langCode);
+        final licence = await LicenceManager.loadLicence(widget.bookId, languageCode: langCode);
         if (licence != null) {
           isLicenceExpired = DateTime.parse(licence.licenceExpiryDate).isBefore(DateTime.now());
         }
       }
       final hasInternet = await NetworkGuard.hasConnection();
 
-      if (isDownloaded && isLicenceValid) {
+      // Only load local decrypted content when genuinely offline
+      if (!hasInternet && isDownloaded && isLicenceValid) {
         try {
-          book = await DownloadManager.loadBookContent(book);
+          book = await DownloadManager.loadBookContent(book, languageCode: langCode);
         } catch (e) {
           print("Failed to load decrypted book content: $e");
         }
@@ -149,12 +155,12 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     final bookAuthor = _book!.getAuthor(langCode);
 
     final shareText = langCode == 'ku'
-        ? "سەیری ئەم کورتەکراوە سەرنجڕاکێشەی کتێبی '$bookTitle' بکە لە نووسینی $bookAuthor لەسەر ئەپی پەرتوک!"
+        ? "سەیری ئەم کورتکراوە سەرنجڕاکێشەی کتێبی '$bookTitle' بکە لە نووسینی $bookAuthor لەسەر ئەپی پەرتوک!"
         : (langCode == 'ar'
             ? "شاهد هذا الملخص الرائع لكتاب '$bookTitle' للكاتب $bookAuthor على تطبيق پەرتوک!"
             : "Check out this amazing book summary of '$bookTitle' by $bookAuthor on Partwk!");
 
-    final shareLink = "https://partwk.com/book/${_book!.id}?lang=$langCode";
+    final shareLink = "https://partwk-bd4ec.web.app/book/${_book!.id}?lang=$langCode";
     final fullMessage = "$shareText\n$shareLink";
 
     showModalBottomSheet(
@@ -321,7 +327,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     final localizations = AppLocalizations.of(context)!;
     final langCode = localizations.locale.languageCode;
 
-    final dialogTitle = langCode == 'ku' ? 'تەواوکردنی ئەم کورتەکراوەیە؟' :
+    final dialogTitle = langCode == 'ku' ? 'تەواوکردنی ئەم کورتکراوەیە؟' :
                         langCode == 'ar' ? 'تحديد هذا الملخص كمكتمل؟' :
                         'Mark this summary as complete?';
 
@@ -367,7 +373,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     final localizations = AppLocalizations.of(context)!;
     final langCode = localizations.locale.languageCode;
 
-    final dialogTitle = langCode == 'ku' ? 'تەواونەکردنی ئەم کورتەکراوەیە؟' :
+    final dialogTitle = langCode == 'ku' ? 'تەواونەکردنی ئەم کورتکراوەیە؟' :
                         langCode == 'ar' ? 'تحديد هذا الملخص كغير مكتمل؟' :
                         'Mark this summary as incomplete?';
 
@@ -408,11 +414,104 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     );
   }
 
+  void _showDownloadLimitDialog() {
+    final loc = AppLocalizations.of(context)!;
+    final langCode = loc.locale.languageCode;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          langCode == 'ku'
+              ? 'سنووری داگرتن (٣ پەرتووک)'
+              : (langCode == 'ar' ? 'الحد الأقصى للتنزيل (٣ كتب)' : 'Download Limit (3 Books Max)'),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          langCode == 'ku'
+              ? 'دەتوانیت تەنها ٣ پەرتووک لە یەک کاتدا بۆ دەرەوەی هێڵ دابگریت. تکایە پەرتووکێک بسڕەوە بۆ دابەزاندنی ئەم ناونیشانە.'
+              : (langCode == 'ar'
+                  ? 'يمكنك تنزيل ٣ كتب كحد أقصى في وقت واحد للاستماع والقراءة بدون إنترنت. يرجى حذف أحد الكتب السابقة للمتابعة.'
+                  : 'You can store at most 3 books for offline reading/listening at a time. Please view your Offline Library and delete an existing download to free a slot.'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(loc.translate('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+              );
+            },
+            child: Text(
+              langCode == 'ku'
+                  ? 'مەکتەبەی داگیراوەکان'
+                  : (langCode == 'ar' ? 'مكتبة التنزيلات' : 'Offline Library'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRemoveDownloadDialog() {
+    if (_book == null) return;
+    final loc = AppLocalizations.of(context)!;
+    final langCode = loc.locale.languageCode;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          langCode == 'ku' ? 'سڕینەوەی داگرتن' : (langCode == 'ar' ? 'إزالة التنزيل' : 'Remove Download'),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          langCode == 'ku'
+              ? 'ئایا دڵنیایت لە سڕینەوەی ئەم پەرتووکە لە داگیراوەکانی دەرەوەی هێڵ؟'
+              : (langCode == 'ar'
+                  ? 'هل أنت متأكد من إزالة هذا الكتاب من التنزيلات في وضع عدم الاتصال؟'
+                  : 'Are you sure you want to remove this book from your offline downloads?'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(loc.translate('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await DownloadService().removeDownload(_book!.id, languageCode: langCode);
+              if (mounted) {
+                final isStillDownloaded = await DownloadService().isBookDownloaded(_book!.id, languageCode: langCode);
+                setState(() {
+                  _isDownloaded = isStillDownloaded;
+                  _isLicenceValid = isStillDownloaded;
+                });
+                _showToast(
+                  langCode == 'ku' ? 'داگرتنەکە لابرا' : (langCode == 'ar' ? 'تمت إزالة التنزيل' : 'Download removed'),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(langCode == 'ku' ? 'سڕینەوە' : (langCode == 'ar' ? 'إزالة' : 'Remove')),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _downloadBook() async {
     if (_book == null) return;
     final user = AppLocator.auth.currentUser;
-    // Require premium subscription to download
-    if (_book!.isPremium && (user == null || !user.isPremium)) {
+    // Require valid active Premium entitlement to download ANY book
+    if (user == null || AppLocator.auth.isGuest || !user.isPremium) {
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const PaywallScreen()),
       );
@@ -427,34 +526,59 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       _downloadProgress = 0.0;
     });
     
-    bool success = await DownloadService().downloadBook(_book!, langCode, (progress) {
-      if (mounted) {
-        setState(() {
-          _downloadProgress = progress;
-        });
-      }
-    });
-
-    if (mounted) {
-      if (success) {
-        try {
-          final decrypted = await DownloadManager.loadBookContent(_book!);
-          final isLicenceValid = await LicenceManager.isLicenceValid(widget.bookId);
+    try {
+      bool success = await DownloadService().downloadBook(_book!, langCode, (progress) {
+        if (mounted) {
           setState(() {
-            _book = decrypted;
-            _isLicenceValid = isLicenceValid;
+            _downloadProgress = progress;
           });
-        } catch (e) {
-          print("Failed to load decrypted book content after download: $e");
+        }
+      });
+
+      if (mounted) {
+        if (success) {
+          try {
+            final decrypted = await DownloadManager.loadBookContent(_book!, languageCode: langCode);
+            final isLicenceValid = await LicenceManager.isLicenceValid(widget.bookId, languageCode: langCode, userId: user.id);
+            setState(() {
+              _book = decrypted;
+              _isLicenceValid = isLicenceValid;
+            });
+          } catch (e) {
+            print("Failed to load decrypted book content after download: $e");
+          }
+        }
+        setState(() {
+          _isDownloading = false;
+          _isDownloaded = success;
+        });
+        if (success) {
+          _showToast(localizations.translate('downloaded_success'));
+        } else {
+          _showToast(localizations.translate('downloaded_failed'));
         }
       }
-      setState(() {
-        _isDownloading = false;
-        _isDownloaded = success;
-      });
-      if (success) {
-        _showToast(localizations.translate('downloaded_success'));
-      } else {
+    } on DownloadLimitExceededException {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+        });
+        _showDownloadLimitDialog();
+      }
+    } on DownloadPermissionDeniedException {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+        });
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const PaywallScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+        });
         _showToast(localizations.translate('downloaded_failed'));
       }
     }
@@ -827,7 +951,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                                   )
                                 )
                               : Icon(_isDownloaded ? Icons.offline_pin : Icons.download, color: _isDownloaded ? Colors.teal : Colors.white),
-                          onPressed: _isDownloaded ? null : _downloadBook,
+                          onPressed: _isDownloaded ? _showRemoveDownloadDialog : _downloadBook,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1037,7 +1161,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                           langCode == 'ar'
                               ? 'هذا الملخص غير متوفر باللغة العربية. يرجى تغيير لغة التطبيق للوصول إليه.'
                               : langCode == 'ku'
-                                  ? 'ئەم کورتەکراوەیە بە زمانی کوردی بەردەست نییە. تکایە زمانی ئەپەکە بگۆڕە بۆ بینینی.'
+                                  ? 'ئەم کورتکراوەیە بە زمانی کوردی بەردەست نییە. تکایە زمانی ئەپەکە بگۆڕە بۆ بینینی.'
                                   : 'This summary is not available in English. Please switch the app language to access it.',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.bold,
@@ -1065,16 +1189,17 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                             Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaywallScreen()));
                             return;
                           }
-                          final isDownloaded = await DownloadManager.isBookDownloaded(_book!.id);
+                          final activeLang = widget.initialLanguageCode ?? localizations.locale.languageCode;
+                          final isDownloaded = await DownloadManager.isEditionDownloaded(_book!.id, activeLang);
                           final hasNet = await NetworkGuard.hasConnection();
                           if (!hasNet && !isDownloaded) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Connect to the internet to download or stream this title.')),
+                              const SnackBar(content: Text('Connect to the internet to stream or download this edition.')),
                             );
                             return;
                           }
-                          if (isDownloaded) {
-                            final isValid = await LicenceManager.isLicenceValid(_book!.id);
+                          if (!hasNet && isDownloaded) {
+                            final isValid = await LicenceManager.isLicenceValid(_book!.id, languageCode: activeLang);
                             if (!isValid) {
                               final isExpired = user != null && (user.subscriptionStatus != 'premium' && user.subscriptionStatus != 'pro' && !user.hasFamilyPremium);
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -1088,7 +1213,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                             }
                           }
                           await Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => SummaryReaderScreen(bookId: _book!.id)),
+                            MaterialPageRoute(builder: (_) => SummaryReaderScreen(bookId: _book!.id, languageCode: activeLang)),
                           );
                           _loadBookDetails();
                         },
@@ -1111,16 +1236,17 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                             Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaywallScreen()));
                             return;
                           }
-                          final isDownloaded = await DownloadManager.isBookDownloaded(_book!.id);
+                          final activeLang = widget.initialLanguageCode ?? localizations.locale.languageCode;
+                          final isDownloaded = await DownloadManager.isEditionDownloaded(_book!.id, activeLang);
                           final hasNet = await NetworkGuard.hasConnection();
                           if (!hasNet && !isDownloaded) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Connect to the internet to download or stream this title.')),
+                              const SnackBar(content: Text('Connect to the internet to stream or download this edition.')),
                             );
                             return;
                           }
-                          if (isDownloaded) {
-                            final isValid = await LicenceManager.isLicenceValid(_book!.id);
+                          if (!hasNet && isDownloaded) {
+                            final isValid = await LicenceManager.isLicenceValid(_book!.id, languageCode: activeLang);
                             if (!isValid) {
                               final isExpired = user != null && (user.subscriptionStatus != 'premium' && user.subscriptionStatus != 'pro' && !user.hasFamilyPremium);
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -1134,12 +1260,94 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                             }
                           }
                           // Start playing globally
-                          final chapters = _book!.getChapterSummaries(langCode);
+                          var playbackBook = _book!;
+                          if (playbackBook.isPremium && !_isDownloaded) {
+                            try {
+                              playbackBook = await ProtectedTextService.hydrate(playbackBook, langCode);
+                            } on ContentPermissionDeniedException {
+                              if (context.mounted) {
+                                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaywallScreen()));
+                              }
+                              return;
+                            } on UnpublishedLanguageException catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                              }
+                              return;
+                            } catch (e) {
+                              if (context.mounted) {
+                                final isOffline = !await NetworkGuard.hasConnection();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(isOffline
+                                      ? 'Connect to the internet to download or stream this title.'
+                                      : (e is ContentUnavailableException ? e.message : 'Unable to load book text.'))),
+                                );
+                              }
+                              return;
+                            }
+                          }
+                          if (!context.mounted) return;
+                          final chapters = playbackBook.getChapterSummaries(langCode);
                           final globalAudioUrl = _book!.getAudioUrl(langCode);
                           final coverUrl = _book!.getCoverImageUrl(langCode);
-                          AppLocator.audio.play(_book!.id, langCode, _book!.getTitle(langCode), coverUrl, globalAudioUrl, chapters, bookDurationSecs: _book!.getDurationForLanguage(langCode));
+                          final audioService = AppLocator.audio;
+                          final isCurrentBook = audioService.currentBookId == _book!.id && audioService.currentLangCode == langCode;
+
+                          int initialIndex = 0;
+                          int startPos = 0;
+
+                          if (isCurrentBook) {
+                            initialIndex = audioService.currentChapterIndex;
+                            startPos = audioService.position.inSeconds;
+                            if (!audioService.isPlaying) {
+                              audioService.resume();
+                            }
+                          } else {
+                            var progress = AppLocator.auth.currentUser?.listeningProgress['${_book!.id}_$langCode'];
+                            if (progress == null) {
+                              final prefix = '${_book!.id}_';
+                              final matchingKey = AppLocator.auth.currentUser?.listeningProgress.keys.firstWhere(
+                                (k) => k.startsWith(prefix),
+                                orElse: () => '',
+                              ) ?? '';
+                              if (matchingKey.isNotEmpty) {
+                                progress = AppLocator.auth.currentUser?.listeningProgress[matchingKey];
+                              }
+                            }
+                            if (progress != null) {
+                              initialIndex = progress['chapterIndex'] ?? 0;
+                              startPos = progress['positionSeconds'] ?? 0;
+                            }
+
+                            audioService.play(
+                              _book!.id,
+                              langCode,
+                              _book!.getTitle(langCode),
+                              coverUrl,
+                              globalAudioUrl,
+                              chapters,
+                              startIndex: initialIndex,
+                              startPosition: startPos,
+                              bookDurationSecs: _book!.getDurationForLanguage(langCode),
+                              isPremium: _book!.isPremium,
+                            );
+                          }
+
                           await Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => AudioPlayerScreen(bookId: _book!.id, langCode: langCode, bookTitle: _book!.getTitle(langCode), coverUrl: coverUrl, globalAudioUrl: globalAudioUrl, chapters: chapters, bookDurationSecs: _book!.getDurationForLanguage(langCode))),
+                            MaterialPageRoute(
+                              builder: (_) => AudioPlayerScreen(
+                                bookId: _book!.id,
+                                langCode: langCode,
+                                bookTitle: _book!.getTitle(langCode),
+                                coverUrl: coverUrl,
+                                globalAudioUrl: globalAudioUrl,
+                                chapters: chapters,
+                                initialChapterIndex: initialIndex,
+                                initialPositionSecs: startPos,
+                                bookDurationSecs: _book!.getDurationForLanguage(langCode),
+                                isPremium: _book!.isPremium,
+                              ),
+                            ),
                           );
                           _loadBookDetails();
                         },

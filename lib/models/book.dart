@@ -27,6 +27,7 @@ class Book {
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<String> hiddenLanguages;
+  final bool isPublished;
 
   Book({
     required this.id,
@@ -48,6 +49,7 @@ class Book {
     required this.createdAt,
     required this.updatedAt,
     required this.hiddenLanguages,
+    this.isPublished = true,
   }) : coverImageUrlMap = coverImageUrl is Map
             ? SafeParser.asMapStringString(coverImageUrl)
             : {'en': coverImageUrl?.toString() ?? ''};
@@ -67,6 +69,7 @@ class Book {
   String getCoverImageUrl(String langCode) => coverImageUrlMap[langCode] ?? coverImageUrl;
 
   bool hasContentForLanguage(String langCode) {
+    if (hiddenLanguages.contains(langCode)) return false;
     return title.containsKey(langCode) && title[langCode]!.isNotEmpty;
   }
 
@@ -178,12 +181,24 @@ class Book {
         });
       }
 
+      List<String> parsedCategories = SafeParser.asListString(data['categories']);
+      if (parsedCategories.isEmpty) {
+        parsedCategories = SafeParser.asListString(data['categoryIds']);
+      }
+      if (parsedCategories.isEmpty && data['category'] != null) {
+        if (data['category'] is String && (data['category'] as String).trim().isNotEmpty) {
+          parsedCategories = [(data['category'] as String).trim()];
+        } else if (data['category'] is List) {
+          parsedCategories = SafeParser.asListString(data['category']);
+        }
+      }
+
       return Book(
         id: id,
         title: SafeParser.asMapStringString(data['title']),
         author: SafeParser.asMapStringString(data['author']),
         coverImageUrl: data['coverImageUrl'],
-        categoryIds: SafeParser.asListString(data['categoryIds']),
+        categoryIds: parsedCategories,
         tags: SafeParser.asListString(data['tags']),
         description: SafeParser.asMapStringString(data['description']),
         fiveMinuteSummary: SafeParser.asMapStringString(data['fiveMinuteSummary']),
@@ -195,6 +210,7 @@ class Book {
         audioUrl: SafeParser.asMapStringString(data['audioUrl']),
         duration: data['duration'] is num ? (data['duration'] as num).toInt() : 0,
         isPremium: data['isPremium'] == true,
+        isPublished: data['isPublished'] != false,
         hiddenLanguages: SafeParser.asListString(data['hiddenLanguages']),
         createdAt: data['createdAt'] != null
             ? (data['createdAt'] is String
@@ -216,6 +232,9 @@ class Book {
     }
   }
 
+  /// Alias for categoryIds to support multi-category nomenclature
+  List<String> get categories => categoryIds;
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -223,6 +242,8 @@ class Book {
       'author': author,
       'coverImageUrl': coverImageUrlMap,
       'categoryIds': categoryIds,
+      'categories': categoryIds,
+      'category': categoryIds.isNotEmpty ? categoryIds.first : '',
       'tags': tags,
       'description': description,
       'fiveMinuteSummary': fiveMinuteSummary,
@@ -234,6 +255,7 @@ class Book {
       'audioUrl': audioUrl,
       'duration': duration,
       'isPremium': isPremium,
+      'isPublished': isPublished,
       'hiddenLanguages': hiddenLanguages,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
