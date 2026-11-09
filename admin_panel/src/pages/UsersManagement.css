@@ -84,6 +84,18 @@
   border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
+.badge-plan.warning {
+  background: rgba(249, 115, 22, 0.15);
+  color: #FB923C;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.badge-plan.shared {
+  background: rgba(139, 92, 246, 0.15);
+  color: #A78BFA;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
 .status-cell {
   display: flex;
   align-items: center;

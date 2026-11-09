@@ -161,10 +161,54 @@ const getRenewalReminderEmailHTML = (name, expiryDate) => `
 </div>
 `;
 
+const getStoreBadgesHTML = (lang) => {
+  // Configured live store URLs
+  // Package ID / Bundle ID: com.pkgames.partwk
+  // Note: Neither Google Play nor iOS App Store is publicly live yet (both return 404).
+  // Per requirements: If either store is not live or no verified URL exists, do not insert a fake badge/link.
+  const iosLiveUrl = process.env.LIVE_APP_STORE_URL || null;
+  const playLiveUrl = process.env.LIVE_GOOGLE_PLAY_URL || null;
+
+  const appLink = "https://partwk-bd4ec.web.app";
+  const isKu = lang === 'ku';
+  const isAr = lang === 'ar';
+  const buttonText = isKu ? 'کردنەوەی پەرتوک' : isAr ? 'فتح تطبيق بارتوك' : 'Open Partwk';
+
+  const badges = [];
+  if (iosLiveUrl) {
+    badges.push(`
+      <a href="${iosLiveUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin: 6px;">
+        <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us" alt="Download on the App Store" style="height: 40px; width: auto; border-radius: 6px;" />
+      </a>
+    `);
+  }
+  if (playLiveUrl) {
+    badges.push(`
+      <a href="${playLiveUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin: 6px;">
+        <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" style="height: 40px; width: auto;" />
+      </a>
+    `);
+  }
+
+  if (badges.length > 0) {
+    return `
+    <div style="text-align: center; margin: 28px 0 16px 0;">
+      <div style="display: inline-block;">
+        ${badges.join('')}
+      </div>
+    </div>`;
+  }
+
+  return `
+    <div style="text-align: center; margin: 28px 0 16px 0;">
+      <a href="${appLink}" style="background-color: #FF7B00; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">${buttonText}</a>
+    </div>`;
+};
+
 const getFamilyInvitationEmailHTML = (inviterName, recipientEmail, lang) => {
   const isKu = lang === 'ku';
   const isAr = lang === 'ar';
-  const appLink = "https://partwk.com";
+  const footerBadges = getStoreBadgesHTML(lang);
 
   if (isKu) {
     return `
@@ -200,9 +244,7 @@ const getFamilyInvitationEmailHTML = (inviterName, recipientEmail, lang) => {
       لە کاتی چالاکبوونی پلانی خێزانیدا، دەتوانیت بە بێسنووری پوختەی سەدان پەرتووک بخوێنیتەوە و گوێیان لێ بگریت، دابەزاندنی ئۆفلاین بکەیت و لە هەموو مۆڵەتەکانی پریمیۆم سوودمەند بیت.
     </p>
 
-    <div style="text-align: center; margin: 32px 0 16px 0;">
-      <a href="${appLink}" style="background-color: #FF7B00; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">کردنەوەی پەرتوک</a>
-    </div>
+    ${footerBadges}
   </div>
 </div>`;
   }
@@ -241,9 +283,7 @@ const getFamilyInvitationEmailHTML = (inviterName, recipientEmail, lang) => {
       طالما أن الاشتراك العائلي نشط، يمكنك قراءة والاستماع إلى ملخصات الكتب بلا حدود والاستفادة من التحميل دون اتصال وكافة مزايا بريميوم.
     </p>
 
-    <div style="text-align: center; margin: 32px 0 16px 0;">
-      <a href="${appLink}" style="background-color: #FF7B00; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">فتح تطبيق بارتوك</a>
-    </div>
+    ${footerBadges}
   </div>
 </div>`;
   }
@@ -282,9 +322,7 @@ const getFamilyInvitationEmailHTML = (inviterName, recipientEmail, lang) => {
       Once accepted, you will have unlimited access to read and listen to all book summaries, download editions offline, and explore all Premium features.
     </p>
 
-    <div style="text-align: center; margin: 32px 0 16px 0;">
-      <a href="${appLink}" style="background-color: #FF7B00; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">Open Partwk</a>
-    </div>
+    ${footerBadges}
   </div>
 </div>`;
 };
@@ -832,6 +870,9 @@ exports.inviteFamilyMember = onCall({ secrets: [smtpPass] }, async (request) => 
     }
 
     const family = ownerFamily.exists ? ownerFamily.data() : {};
+    if (family.lockedRecipientEmail) {
+      throw new HttpsError('failed-precondition', 'This family slot is permanently assigned. To change this member, please contact Partwk Support.');
+    }
     if (family.memberUid || family.invitation) {
       throw new HttpsError('failed-precondition', 'Your one family slot is already reserved or active.');
     }
@@ -851,6 +892,8 @@ exports.inviteFamilyMember = onCall({ secrets: [smtpPass] }, async (request) => 
 
     transaction.set(db.doc(`families/${ownerUid}`), {
       ownerUid,
+      lockedRecipientEmail: email,
+      slotLockedAt: ts(),
       invitation: {
         recipientUid: recipient ? recipient.uid : null,
         recipientEmail: email,
@@ -891,10 +934,15 @@ exports.inviteFamilyMember = onCall({ secrets: [smtpPass] }, async (request) => 
       const familyRef = db.doc(`families/${ownerUid}`);
       const famSnap = await rollbackTx.get(familyRef);
       if (famSnap.exists && famSnap.data().invitation?.recipientEmail === email) {
-        rollbackTx.update(familyRef, {
+        const rollbackUpdates = {
           invitation: FieldValue.delete(),
           updatedAt: ts(),
-        });
+        };
+        if (famSnap.data().lockedRecipientEmail === email) {
+          rollbackUpdates.lockedRecipientEmail = FieldValue.delete();
+          rollbackUpdates.slotLockedAt = FieldValue.delete();
+        }
+        rollbackTx.update(familyRef, rollbackUpdates);
       }
       if (recipient) {
         rollbackTx.delete(db.doc(`familyMemberships/${recipient.uid}`));
@@ -907,6 +955,7 @@ exports.inviteFamilyMember = onCall({ secrets: [smtpPass] }, async (request) => 
   await writeAudit(ownerUid, 'family_invite_created', {
     recipientUid: recipient ? recipient.uid : null,
     recipientEmail: email,
+    lockedRecipientEmail: email,
     language: targetLang,
   });
 
@@ -1002,9 +1051,22 @@ exports.getFamilyStatus = onCall(async (request) => {
     }
   }
 
+  const famData = familySnap.exists ? familySnap.data() : null;
+  if (famData && !famData.lockedRecipientEmail) {
+    const locked = famData.memberEmail || famData.invitation?.recipientEmail || null;
+    if (locked) {
+      famData.lockedRecipientEmail = locked;
+      famData.slotLockedAt = famData.activatedAt || famData.invitation?.createdAt || ts();
+      db.doc(`families/${uid}`).set({
+        lockedRecipientEmail: locked,
+        slotLockedAt: famData.slotLockedAt,
+      }, { merge: true }).catch(err => console.warn("Lock backfill error:", err));
+    }
+  }
+
   return {
     membership: membershipSnap.exists ? membershipSnap.data() : null,
-    family: familySnap.exists ? familySnap.data() : null,
+    family: famData,
     entitlement: entitlementSnap.exists ? entitlementSnap.data() : null,
   };
 });
@@ -1050,6 +1112,8 @@ exports.acceptFamilyInvitation = onCall(async (request) => {
     transaction.set(db.doc(`families/${m.ownerUid}`), {
       memberUid,
       memberEmail: recipientEmail,
+      lockedRecipientEmail: famData.lockedRecipientEmail || recipientEmail,
+      slotLockedAt: famData.slotLockedAt || ts(),
       invitation: FieldValue.delete(),
       activatedAt: ts(),
       updatedAt: ts(),
@@ -1067,20 +1131,11 @@ exports.acceptFamilyInvitation = onCall(async (request) => {
 
 exports.cancelFamilyInvitation = onCall(async (request) => {
   const ownerUid = requireUser(request);
-  await db.runTransaction(async transaction => {
-    const familyRef = db.doc(`families/${ownerUid}`);
-    const family = await transaction.get(familyRef);
-    if (!family.exists || !family.data().invitation) {
-      throw new HttpsError('failed-precondition', 'No pending invitation.');
-    }
-    const recipientUid = family.data().invitation.recipientUid;
-    transaction.update(familyRef, { invitation: FieldValue.delete(), updatedAt: ts() });
-    if (recipientUid) {
-      transaction.delete(db.doc(`familyMemberships/${recipientUid}`));
-    }
-  });
-  await writeAudit(ownerUid, 'family_invitation_cancelled', {});
-  return { status: 'cancelled' };
+  const famDoc = await db.doc(`families/${ownerUid}`).get();
+  if (famDoc.exists && (famDoc.data().lockedRecipientEmail || famDoc.data().invitation)) {
+    throw new HttpsError('failed-precondition', 'Family invitations cannot be cancelled or replaced. To change this family member, please contact Partwk Support.');
+  }
+  throw new HttpsError('failed-precondition', 'No pending invitation.');
 });
 
 async function endFamily(ownerUid, actorUid, action, override = false, auditDetails = {}) {
@@ -1099,6 +1154,7 @@ async function endFamily(ownerUid, actorUid, action, override = false, auditDeta
       memberUid: FieldValue.delete(),
       memberEmail: FieldValue.delete(),
       updatedAt: ts(),
+      // lockedRecipientEmail and slotLockedAt are NOT deleted. Slot remains permanently locked.
     }, { merge: true });
     await projectMember(transaction, memberUid, ownerUid, null, 'removed');
     transaction.set(db.doc(`users/${ownerUid}`), { familyMembers: [] }, { merge: true });
@@ -1106,13 +1162,23 @@ async function endFamily(ownerUid, actorUid, action, override = false, auditDeta
   await writeAudit(actorUid, action, { ownerUid, memberUid, override, ...auditDetails });
   return { status: 'removed' };
 }
-exports.removeFamilyMember = onCall(async request => endFamily(requireUser(request), requireUser(request), 'family_member_removed'));
+
+exports.removeFamilyMember = onCall(async request => {
+  const ownerUid = requireUser(request);
+  const famDoc = await db.doc(`families/${ownerUid}`).get();
+  if (famDoc.exists && (famDoc.data().lockedRecipientEmail || famDoc.data().memberUid)) {
+    throw new HttpsError('failed-precondition', 'This family slot is permanently assigned. To change this family member, please contact Partwk Support.');
+  }
+  return endFamily(ownerUid, ownerUid, 'family_member_removed');
+});
+
 exports.leaveFamily = onCall(async request => {
   const uid = requireUser(request);
   const m = await db.doc(`familyMemberships/${uid}`).get();
   if (!m.exists || m.data().state !== 'active') throw new HttpsError('failed-precondition', 'No active family.');
   return endFamily(m.data().ownerUid, uid, 'family_member_left');
 });
+
 exports.adminOverrideFamilyRemoval = onCall(async request => {
   const actorUid = requireUser(request);
   if (!isAdminToken(request)) throw new HttpsError('permission-denied', 'Administrator required.');
@@ -1120,6 +1186,52 @@ exports.adminOverrideFamilyRemoval = onCall(async request => {
   const reason = String(request.data?.reason || '').trim();
   if (!ownerUid || !reason) throw new HttpsError('invalid-argument', 'Owner and reason are required.');
   return endFamily(ownerUid, actorUid, 'family_admin_override_removal', true, { reason });
+});
+
+exports.adminUpdateFamilySlotEmail = onCall(async (request) => {
+  const actorUid = requireUser(request);
+  if (!isAdminToken(request)) {
+    throw new HttpsError('permission-denied', 'Administrator required.');
+  }
+  const ownerUid = String(request.data?.ownerUid || '').trim();
+  const newEmail = String(request.data?.newEmail || '').trim().toLowerCase();
+  const reason = String(request.data?.reason || '').trim();
+  if (!ownerUid || !/^\S+@\S+\.\S+$/.test(newEmail) || !reason) {
+    throw new HttpsError('invalid-argument', 'Valid ownerUid, newEmail, and reason are required.');
+  }
+
+  let oldEmail = null;
+  await db.runTransaction(async (transaction) => {
+    const familyRef = db.doc(`families/${ownerUid}`);
+    const famSnap = await transaction.get(familyRef);
+    if (!famSnap.exists) {
+      throw new HttpsError('not-found', 'Family record not found for this owner.');
+    }
+    const fam = famSnap.data();
+    oldEmail = fam.lockedRecipientEmail || fam.memberEmail || fam.invitation?.recipientEmail || null;
+
+    const updateData = {
+      lockedRecipientEmail: newEmail,
+      slotLockedAt: ts(),
+      updatedAt: ts(),
+    };
+    if (fam.invitation) {
+      updateData['invitation.recipientEmail'] = newEmail;
+      updateData['invitation.recipientUid'] = null;
+    }
+    transaction.update(familyRef, updateData);
+  });
+
+  await writeAudit(actorUid, 'admin_update_family_slot_email', {
+    ownerUid,
+    oldEmail,
+    newEmail,
+    actingAdminUid: actorUid,
+    reason,
+    timestamp: ts(),
+  });
+
+  return { success: true, oldEmail, newEmail, ownerUid };
 });
 
 // Store verification is fail-closed until App Store Server API / Google Play

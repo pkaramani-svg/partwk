@@ -503,3 +503,25 @@ export const writeAuditLog = async (action, details) => {
   });
 };
 
+// Family Sharing Management
+export const fetchFamilies = async () => {
+  const querySnapshot = await getDocs(collection(db, 'families'));
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const fetchFamilyMemberships = async () => {
+  const querySnapshot = await getDocs(collection(db, 'familyMemberships'));
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const fetchEntitlements = async () => {
+  const querySnapshot = await getDocs(collection(db, 'entitlements'));
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const adminUpdateFamilySlotEmail = async (ownerUid, newEmail, reason) => {
+  const fn = httpsCallable(getFunctions(), 'adminUpdateFamilySlotEmail');
+  const result = await fn({ ownerUid, newEmail, reason });
+  return result.data;
+};
+

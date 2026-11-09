@@ -169,7 +169,7 @@ void main() {
   });
 
   group('Family Sharing Settings UI Tests', () {
-    testWidgets('State 1: Primary with Active Member shows email and remove button, hides invite input', (tester) async {
+    testWidgets('State 1: Primary with Active Member shows email and locked note, hides remove button and invite input', (tester) async {
       mockAuth.setUser(makeUser(id: 'primary_1', email: 'primary@example.com', status: 'premium'));
       mockFamily.statusResult = {
         'membership': null,
@@ -189,13 +189,15 @@ void main() {
 
       expect(find.text('1 of 1 Active'), findsOneWidget);
       expect(find.text('linked@example.com'), findsOneWidget);
-      expect(find.text('Remove Member'), findsOneWidget);
+      // Remove button is removed in favor of permanent lock support notice
+      expect(find.text('Remove Member'), findsNothing);
+      expect(find.text('To change this family member, please contact Partwk Support.'), findsOneWidget);
       // Ensure email text field is completely absent
       expect(find.byType(TextField), findsNothing);
       expect(find.text('Invite Family Member'), findsNothing);
     });
 
-    testWidgets('State 2: Primary with Pending Invite shows invited email and cancel button, hides input', (tester) async {
+    testWidgets('State 2: Primary with Pending Invite shows invited email and locked note, hides cancel button and input', (tester) async {
       mockAuth.setUser(makeUser(id: 'primary_1', email: 'primary@example.com', status: 'premium'));
       mockFamily.statusResult = {
         'membership': null,
@@ -217,7 +219,9 @@ void main() {
 
       expect(find.text('1 of 1 Reserved'), findsOneWidget);
       expect(find.text('pending@example.com'), findsOneWidget);
-      expect(find.text('Cancel Invitation'), findsOneWidget);
+      // Cancel button is removed in favor of permanent lock support notice
+      expect(find.text('Cancel Invitation'), findsNothing);
+      expect(find.text('To change this family member, please contact Partwk Support.'), findsOneWidget);
       // Ensure email text field is completely absent
       expect(find.byType(TextField), findsNothing);
     });
@@ -278,7 +282,7 @@ void main() {
       await tester.pumpWidget(buildTestScreen(const Locale('en')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Premium through Family Sharing'), findsOneWidget);
+      expect(find.text('Premium through Family Sharing'), findsWidgets);
       expect(find.text('Leave Family Plan'), findsOneWidget);
       expect(find.byType(TextField), findsNothing);
       expect(find.text('Invite family member'), findsNothing);
@@ -337,13 +341,15 @@ void main() {
       await tester.pumpWidget(buildTestScreen(const Locale('ku')));
       await tester.pumpAndSettle();
       expect(find.text('١ لە ١ چالاکە'), findsOneWidget);
-      expect(find.text('سڕینەوەی ئەندام'), findsOneWidget);
+      expect(find.text('سڕینەوەی ئەندام'), findsNothing);
+      expect(find.text('بۆ گۆڕینی ئەم ئەندامەی خێزان، تکایە پەیوەندی بە بەشی پشتیوانیی پەرتوکەوە بکە.'), findsOneWidget);
 
       // Arabic
       await tester.pumpWidget(buildTestScreen(const Locale('ar')));
       await tester.pumpAndSettle();
       expect(find.text('نشط 1 من 1'), findsOneWidget);
-      expect(find.text('إزالة العضو'), findsOneWidget);
+      expect(find.text('إزالة العضو'), findsNothing);
+      expect(find.text('لتغيير هذا العضو من العائلة، يرجى التواصل مع دعم بارتوك.'), findsOneWidget);
     });
 
     testWidgets('App lifecycle resumed event triggers status refresh', (tester) async {

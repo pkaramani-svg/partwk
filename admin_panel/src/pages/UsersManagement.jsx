@@ -2,7 +2,20 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Trash2, CheckCircle, XCircle, X, Edit2, Key, BarChart2, Plus, ArrowUp, ArrowDown, Lock } from 'lucide-react';
 import './UsersManagement.css';
-import { fetchUsers, subscribeToUsers, fetchBooks, updateUserStatus, sendPasswordResetEmail, createNewUserManually, deleteUser, updateUserPasswordDirectly } from '../services/api';
+import { 
+  fetchUsers, 
+  subscribeToUsers, 
+  fetchBooks, 
+  updateUserStatus, 
+  sendPasswordResetEmail, 
+  createNewUserManually, 
+  deleteUser, 
+  updateUserPasswordDirectly,
+  fetchFamilies,
+  fetchFamilyMemberships,
+  fetchEntitlements,
+  adminUpdateFamilySlotEmail
+} from '../services/api';
 
 const formatDateTimeLocal = (isoString) => {
   if (!isoString) return '';
@@ -24,6 +37,9 @@ const UsersManagement = () => {
   const [searchTerm, setSearchTerm] = useOutletContext();
   const [users, setUsers] = useState([]);
   const [books, setBooks] = useState([]);
+  const [families, setFamilies] = useState([]);
+  const [familyMemberships, setFamilyMemberships] = useState([]);
+  const [entitlements, setEntitlements] = useState([]);
   const [loading, setLoading] = useState(true);
   
   // Sorting State
@@ -54,6 +70,10 @@ const UsersManagement = () => {
 
   // Form State for Edit
   const [editForm, setEditForm] = useState({ phone: '', address: '', role: 'user', subscriptionStatus: 'free', status: 'active' });
+  const [showCorrectEmailForm, setShowCorrectEmailForm] = useState(false);
+  const [correctEmailValue, setCorrectEmailValue] = useState('');
+  const [correctEmailReason, setCorrectEmailReason] = useState('');
+  const [isCorrectingEmail, setIsCorrectingEmail] = useState(false);
   
   // Form State for Add User
   const [addUserForm, setAddUserForm] = useState({ name: '', email: '', password: '', role: 'user', subscriptionStatus: 'free' });
@@ -61,9 +81,18 @@ const UsersManagement = () => {
 
   const loadData = async () => {
     try {
-      const [usersData, booksData] = await Promise.all([fetchUsers(), fetchBooks()]);
+      const [usersData, booksData, familiesData, membershipsData, entitlementsData] = await Promise.all([
+        fetchUsers(),
+        fetchBooks(),
+        fetchFamilies().catch(() => []),
+        fetchFamilyMemberships().catch(() => []),
+        fetchEntitlements().catch(() => []),
+      ]);
       setUsers(usersData);
       setBooks(booksData);
+      setFamilies(familiesData);
+      setFamilyMemberships(membershipsData);
+      setEntitlements(entitlementsData);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -89,16 +118,138 @@ const UsersManagement = () => {
     }
   };
 
-  const getFamilyOwner = (userEmail) => {
-    if (!userEmail) return null;
-    return users.find(u => 
-      (u.subscriptionStatus === 'premium' || u.subscriptionStatus === 'pro' || u.role === 'admin') && 
-      u.familyMembers?.includes(userEmail)
+  const getUserFamilyInfo = (user) => {
+    if (!user) return { statusText: 'Free', badgeClass: 'free', entitlement: null, family: null, membership: null };
+    
+    const ent = entitlements.find(e => e.id === user.id);
+    const fam = families.find(f => f.id === user.id);
+    const mem = familyMemberships.find(m => m.id === user.id);
+
+    // Check if recipient of a pending invitation by email
+    const pendingFamInvite = !mem && families.find(f => 
+      f.invitation?.recipientEmail && 
+      user.email && 
+      f.invitation.recipientEmail.toLowerCase() === user.email.toLowerCase()
     );
+
+    // 1. Family Shared (Recipient)
+    if (ent?.source === 'family' && ent?.status === 'active') {
+      const owner = users.find(u => u.id === (ent.ownerUid || mem?.ownerUid));
+      return {
+        statusText: 'Premium — Family Shared',
+        badgeClass: 'shared',
+        entitlement: ent,
+        family: null,
+        membership: mem,
+        ownerEmail: owner?.email || ent.ownerUid || 'Family Owner',
+        ownerUid: ent.ownerUid || mem?.ownerUid,
+      };
+    }
+    if (mem?.state === 'active') {
+      const owner = users.find(u => u.id === mem.ownerUid);
+      return {
+        statusText: 'Premium — Family Shared',
+        badgeClass: 'shared',
+        entitlement: ent,
+        family: null,
+        membership: mem,
+        ownerEmail: owner?.email || mem.ownerUid || 'Family Owner',
+        ownerUid: mem.ownerUid,
+      };
+    }
+    if (mem?.state === 'pending' || pendingFamInvite) {
+      const invFam = pendingFamInvite || families.find(f => f.id === mem?.ownerUid);
+      const owner = users.find(u => u.id === (mem?.ownerUid || invFam?.id));
+      return {
+        statusText: 'Family Invitation Pending',
+        badgeClass: 'warning',
+        entitlement: ent,
+        family: null,
+        membership: mem,
+        ownerEmail: owner?.email || 'Family Owner',
+        ownerUid: mem?.ownerUid || invFam?.id,
+      };
+    }
+
+    // 2. Family Owner
+    if (fam) {
+      const hasActive = fam.memberUid || fam.memberEmail;
+      const hasInvite = fam.invitation && fam.invitation.recipientEmail;
+      const isOwnerPremium = ent?.status === 'active' || user.subscriptionStatus === 'premium' || user.subscriptionStatus === 'pro';
+
+      if (hasActive) {
+        return {
+          statusText: 'Premium — Family Owner',
+          badgeClass: 'premium',
+          entitlement: ent,
+          family: fam,
+          membership: null,
+          memberEmail: fam.memberEmail || fam.lockedRecipientEmail,
+          memberState: 'active',
+        };
+      }
+      if (hasInvite) {
+        return {
+          statusText: 'Family Invitation Pending',
+          badgeClass: 'warning',
+          entitlement: ent,
+          family: fam,
+          membership: null,
+          memberEmail: fam.invitation.recipientEmail,
+          memberState: 'pending',
+        };
+      }
+      if (fam.lockedRecipientEmail) {
+        return {
+          statusText: 'Premium — Family Owner',
+          badgeClass: 'premium',
+          entitlement: ent,
+          family: fam,
+          membership: null,
+          memberEmail: fam.lockedRecipientEmail,
+          memberState: 'vacated',
+        };
+      }
+      if (isOwnerPremium) {
+        return {
+          statusText: 'Premium — Family Owner',
+          badgeClass: 'premium',
+          entitlement: ent,
+          family: fam,
+          membership: null,
+          memberEmail: null,
+          memberState: 'empty',
+        };
+      }
+    }
+
+    // 3. Regular Premium
+    const isPremium = ent?.status === 'active' || user.subscriptionStatus === 'premium' || user.subscriptionStatus === 'pro';
+    if (isPremium) {
+      return {
+        statusText: 'Premium',
+        badgeClass: 'premium',
+        entitlement: ent,
+        family: null,
+        membership: null,
+      };
+    }
+
+    // 4. Free
+    return {
+      statusText: 'Free',
+      badgeClass: 'free',
+      entitlement: ent,
+      family: null,
+      membership: null,
+    };
   };
 
   const openEditModal = (user) => {
     setSelectedUser(user);
+    setShowCorrectEmailForm(false);
+    setCorrectEmailValue('');
+    setCorrectEmailReason('');
     setEditForm({
       phone: user.phone || '',
       address: user.address || '',
@@ -241,8 +392,8 @@ const UsersManagement = () => {
       aVal = (a.role || 'user').toLowerCase();
       bVal = (b.role || 'user').toLowerCase();
     } else if (sortField === 'plan') {
-      aVal = (a.subscriptionStatus || 'free').toLowerCase();
-      bVal = (b.subscriptionStatus || 'free').toLowerCase();
+      aVal = getUserFamilyInfo(a).statusText.toLowerCase();
+      bVal = getUserFamilyInfo(b).statusText.toLowerCase();
     } else if (sortField === 'joined') {
       const getVal = (u) => {
         if (!u.createdAt) return 0;
@@ -375,39 +526,26 @@ const UsersManagement = () => {
                 </td>
                 <td>
                   {(() => {
-                    const familyOwner = getFamilyOwner(user.email);
-                    if (familyOwner) {
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                          <span className="badge-plan premium">
-                            Family Premium
-                          </span>
-                          <span style={{ fontSize: '11px', color: '#8B5CF6', marginTop: '4px', fontWeight: 'bold' }}>
-                            from: {familyOwner.email}
-                          </span>
-                        </div>
-                      );
-                    }
+                    const info = getUserFamilyInfo(user);
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <span className={`badge-plan ${(user.subscriptionStatus === 'premium' || user.subscriptionStatus === 'pro') ? 'premium' : 'free'}`}>
-                          {user.subscriptionStatus || 'free'}
+                        <span className={`badge-plan ${info.badgeClass}`}>
+                          {info.statusText}
                         </span>
-                        {user.subscriptionStatus === 'premium' && (
-                          <div style={{ fontSize: '11px', color: '#10B981', marginTop: '4px' }}>
-                            <div>Start: {user.subscriptionStartDate ? new Date(user.subscriptionStartDate).toLocaleDateString() : 'N/A'}</div>
-                            <div>Expiry: {user.subscriptionExpiryDate ? new Date(user.subscriptionExpiryDate).toLocaleDateString() : 'N/A'}</div>
-                          </div>
+                        {info.memberEmail && (
+                          <span style={{ fontSize: '11px', color: '#8B5CF6', marginTop: '4px', fontWeight: 'bold' }}>
+                            {info.memberState === 'pending' ? 'Invited: ' : 'Member: '} {info.memberEmail}
+                          </span>
                         )}
-                        {((user.subscriptionStatus === 'premium' || user.subscriptionStatus === 'pro' || user.role === 'admin') && user.familyMembers && user.familyMembers.length > 0) && (
-                          <div style={{ display: 'flex', flexDirection: 'column', marginTop: '4px' }}>
-                            <span style={{ fontSize: '11px', color: '#8B5CF6', fontWeight: 'bold' }}>
-                              Sharing with:
-                            </span>
-                            {user.familyMembers.map(email => (
-                              <span key={email} style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>• {email}</span>
-                            ))}
-                          </div>
+                        {info.ownerEmail && (
+                          <span style={{ fontSize: '11px', color: '#8B5CF6', marginTop: '4px', fontWeight: 'bold' }}>
+                            from: {info.ownerEmail}
+                          </span>
+                        )}
+                        {(user.subscriptionExpiryDate || info.entitlement?.expiresAt) && (
+                          <span style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
+                            Exp: {new Date(info.entitlement?.expiresAt?.seconds ? info.entitlement.expiresAt.seconds * 1000 : (info.entitlement?.expiresAt || user.subscriptionExpiryDate)).toLocaleDateString()}
+                          </span>
                         )}
                       </div>
                     );
@@ -485,7 +623,7 @@ const UsersManagement = () => {
       {/* Edit Modal */}
       {showEditModal && selectedUser && (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="modal-content glass-panel" style={{ width: '500px', padding: '32px', position: 'relative' }}>
+          <div className="modal-content glass-panel" style={{ width: '500px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', position: 'relative' }}>
             <button onClick={() => setShowEditModal(false)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={24} /></button>
             <h2 style={{ marginBottom: '24px' }}>Edit User Details</h2>
             <form onSubmit={saveUserEdits} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -544,6 +682,119 @@ const UsersManagement = () => {
                   </div>
                 </>
               )}
+
+              {/* Family & Entitlement Information (Read-Only) */}
+              {(() => {
+                const info = getUserFamilyInfo(selectedUser);
+                const expiryDate = info.entitlement?.expiresAt 
+                  ? (info.entitlement.expiresAt.seconds ? new Date(info.entitlement.expiresAt.seconds * 1000).toLocaleString() : new Date(info.entitlement.expiresAt).toLocaleString())
+                  : (selectedUser.subscriptionExpiryDate ? new Date(selectedUser.subscriptionExpiryDate).toLocaleString() : 'None / Indefinite');
+                const source = info.entitlement?.source || (selectedUser.subscriptionStatus === 'premium' ? 'manual/profile' : 'none');
+
+                return (
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '14px', marginTop: '4px', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                      Family & Entitlement Status (Read-Only)
+                    </div>
+                    <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div><strong>Current Status:</strong> <span style={{ color: info.badgeClass === 'premium' ? '#F59E0B' : '#94A3B8' }}>{info.statusText}</span></div>
+                      <div><strong>Entitlement Source:</strong> <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>{source}</code></div>
+                      <div><strong>Expiry Date:</strong> {expiryDate}</div>
+                      
+                      {/* Family Owner Details */}
+                      {info.family && (
+                        <div style={{ marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                          <div><strong>Assigned Family Member:</strong> {info.memberEmail || 'None assigned yet'}</div>
+                          <div><strong>Slot Status:</strong> {info.memberState === 'active' ? 'Active Member' : info.memberState === 'pending' ? 'Invitation Pending' : info.memberState === 'vacated' ? 'Vacated (Locked Slot)' : 'Empty Slot'}</div>
+                          
+                          {/* Admin support correction button */}
+                          <div style={{ marginTop: '10px' }}>
+                            {!showCorrectEmailForm ? (
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{ fontSize: '12px', padding: '6px 12px', background: 'rgba(139,92,246,0.15)', color: '#A78BFA', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '6px', cursor: 'pointer' }}
+                                onClick={() => {
+                                  setShowCorrectEmailForm(true);
+                                  setCorrectEmailValue(info.memberEmail || '');
+                                  setCorrectEmailReason('');
+                                }}
+                              >
+                                Support: Correct Member Email
+                              </button>
+                            ) : (
+                              <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(139,92,246,0.3)', padding: '12px', borderRadius: '8px', marginTop: '8px' }}>
+                                <label style={{ display: 'block', fontSize: '11px', color: '#CBD5E1', marginBottom: '4px' }}>New Recipient Email</label>
+                                <input
+                                  type="email"
+                                  className="input-field"
+                                  style={{ width: '100%', fontSize: '12px', marginBottom: '8px' }}
+                                  value={correctEmailValue}
+                                  onChange={e => setCorrectEmailValue(e.target.value)}
+                                  placeholder="e.g. member@gmail.com"
+                                />
+                                <label style={{ display: 'block', fontSize: '11px', color: '#CBD5E1', marginBottom: '4px' }}>Reason for Support Override</label>
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  style={{ width: '100%', fontSize: '12px', marginBottom: '10px' }}
+                                  value={correctEmailReason}
+                                  onChange={e => setCorrectEmailReason(e.target.value)}
+                                  placeholder="e.g. Typo in email address"
+                                />
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    type="button"
+                                    className="btn-primary"
+                                    style={{ fontSize: '12px', padding: '5px 12px' }}
+                                    disabled={isCorrectingEmail}
+                                    onClick={async () => {
+                                      if (!correctEmailValue.trim() || !correctEmailReason.trim()) {
+                                        alert('Please enter both the new email and reason.');
+                                        return;
+                                      }
+                                      setIsCorrectingEmail(true);
+                                      try {
+                                        await adminUpdateFamilySlotEmail(selectedUser.id, correctEmailValue.trim(), correctEmailReason.trim());
+                                        alert('Family member email successfully updated and audited.');
+                                        setShowCorrectEmailForm(false);
+                                        await loadData();
+                                      } catch (err) {
+                                        alert('Failed to update email: ' + (err.message || err));
+                                      } finally {
+                                        setIsCorrectingEmail(false);
+                                      }
+                                    }}
+                                  >
+                                    {isCorrectingEmail ? 'Saving...' : 'Apply Correction'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    style={{ fontSize: '12px', padding: '5px 12px' }}
+                                    onClick={() => setShowCorrectEmailForm(false)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Family Recipient Details */}
+                      {info.ownerEmail && (
+                        <div style={{ marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                          <div><strong>Linked Family Owner:</strong> {info.ownerEmail}</div>
+                          <div><strong>Membership State:</strong> {info.membership?.state || (info.entitlement?.status === 'active' ? 'active' : 'pending')}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', color: '#94A3B8' }}>Phone Number</label>
                 <input type="text" className="input-field" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} style={{ width: '100%' }} />

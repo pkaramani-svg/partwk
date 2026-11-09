@@ -15,6 +15,7 @@ import '../../core/widgets/global_audio_bar_wrapper.dart';
 import '../library/saved_library_screen.dart';
 import '../profile/profile_screen.dart';
 import '../profile/paywall_screen.dart';
+import '../../core/widgets/family_welcome_popup.dart';
 
 class NavigationController {
   static void Function(int)? onTabChange;
@@ -66,6 +67,10 @@ class _MainNavigationState extends State<MainNavigation> {
   void _checkVersionAndExpiry() async {
     await _performVersionCheck();
     await _performExpiryCheck();
+    final user = AppLocator.auth.currentUser;
+    if (mounted && user != null && user.hasFamilyPremium && user.subscriptionStatus != 'premium') {
+      FamilyWelcomePopup.showIfNeeded(context, user);
+    }
   }
 
   bool _isVersionLower(String current, String required) {

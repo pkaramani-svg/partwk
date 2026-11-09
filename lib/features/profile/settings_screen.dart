@@ -11,6 +11,7 @@ import '../../services/notification_service.dart';
 import '../auth/login_register_screen.dart';
 import 'paywall_screen.dart';
 import '../../models/user.dart';
+import '../../core/widgets/family_welcome_popup.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -45,10 +46,13 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     if (mounted) setState(() {});
   }
 
-  void _refreshFamilyStatus() {
+  Future<void> _refreshFamilyStatus() async {
     setState(() {
       _familyStatusFuture = AppLocator.family.status();
     });
+    try {
+      await _familyStatusFuture;
+    } catch (_) {}
   }
 
   void _checkNotificationState() async {
@@ -431,6 +435,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   }
 
   Future<void> _addFamilyMember() async {
+    if (_isFamilyBusy) return;
     final email = _familyEmailController.text.trim();
     final localizations = AppLocalizations.of(context)!;
     final user = AppLocator.auth.currentUser;
@@ -456,11 +461,13 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       await AppLocator.family.invite(email, language: localizations.locale.languageCode);
       _familyEmailController.clear();
       _showToast(localizations.translate('family_invite_success').replaceAll('{email}', email));
-      _refreshFamilyStatus();
+      await _refreshFamilyStatus();
     } catch (e) {
       final msg = e.toString().toLowerCase();
       String err = localizations.translate('family_status_error_desc');
-      if (msg.contains('own account')) {
+      if (msg.contains('permanently assigned') || msg.contains('contact partwk support') || msg.contains('permanently locked')) {
+        err = localizations.translate('family_slot_locked_note');
+      } else if (msg.contains('own account')) {
         err = localizations.translate('family_error_own_account');
       } else if (msg.contains('already in a family')) {
         err = localizations.translate('family_error_already_in_family');
@@ -594,12 +601,22 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   }
 
   Future<void> _acceptInvitation() async {
+    if (_isFamilyBusy) return;
     setState(() => _isFamilyBusy = true);
     final localizations = AppLocalizations.of(context)!;
+    final user = AppLocator.auth.currentUser;
     try {
       await AppLocator.family.accept();
       _showToast(localizations.translate('family_premium_member_badge'));
-      _refreshFamilyStatus();
+      await _refreshFamilyStatus();
+      if (mounted && user != null) {
+        FamilyWelcomePopup.showIfNeeded(
+          context,
+          user,
+          entitlement: {'source': 'family', 'status': 'active'},
+          force: true,
+        );
+      }
     } catch (e) {
       _showToast(localizations.translate('family_status_error_desc'));
     } finally {
@@ -899,6 +916,16 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
 
         // 1. Linked Family Member (receiving Premium from another user)
         if (isLinkedMember) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              FamilyWelcomePopup.showIfNeeded(
+                context,
+                user,
+                entitlement: entitlement != null ? Map<String, dynamic>.from(entitlement) : null,
+              );
+            }
+          });
+
           return Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -1041,12 +1068,22 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         }
 
         // 4. Primary Premium Subscriber
-        final hasActiveMember = family?['memberUid'] != null;
+        final hasActiveMember = (family != null && family['memberUid'] != null) ||
+            (family != null && family['memberEmail'] != null && family['memberEmail'].toString().isNotEmpty);
         final hasPendingInvite = family?['invitation'] != null;
+        String? lockedRecipientEmail;
+        if (family?['lockedRecipientEmail'] != null) {
+          lockedRecipientEmail = family?['lockedRecipientEmail']?.toString();
+        } else if (hasActiveMember && family?['memberEmail'] != null) {
+          lockedRecipientEmail = family?['memberEmail']?.toString();
+        } else if (hasPendingInvite && family?['invitation']?['recipientEmail'] != null) {
+          lockedRecipientEmail = family?['invitation']?['recipientEmail']?.toString();
+        }
+        final isSlotLocked = lockedRecipientEmail != null || hasActiveMember || hasPendingInvite;
 
-        // Sub-state A: Accepted Member
-        if (hasActiveMember) {
-          final memberEmail = family?['memberEmail'] ?? 'family-member@partwk.com';
+        // Sub-state A: Accepted Member (Family Sharing Active) or Vacated Locked Slot
+        if (hasActiveMember || (isSlotLocked && !hasPendingInvite)) {
+          final memberEmail = family?['memberEmail']?.toString() ?? lockedRecipientEmail ?? 'family-member@partwk.com';
 
           return Card(
             elevation: 0,
@@ -1070,7 +1107,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                             const SizedBox(width: 10),
                             Flexible(
                               child: Text(
-                                localizations.translate('family_premium_sharing_title'),
+                                localizations.translate('family_sharing_active'),
                                 style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1125,13 +1162,28 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     ),
                   ),
                   const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: _isFamilyBusy ? null : () => _removeFamilyMember(memberEmail),
-                    icon: const Icon(Icons.person_remove_outlined, size: 18),
-                    label: Text(localizations.translate('family_remove_member_btn')),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: theme.colorScheme.error,
-                      side: BorderSide(color: theme.colorScheme.error.withOpacity(0.4)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, size: 18, color: theme.colorScheme.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            localizations.translate('family_slot_locked_note'),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              height: 1.4,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1142,7 +1194,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
 
         // Sub-state B: Pending Invite
         if (hasPendingInvite) {
-          final invitedEmail = family?['invitation']?['recipientEmail'] ?? 'family-invite@partwk.com';
+          final invitedEmail = family?['invitation']?['recipientEmail'] ?? lockedRecipientEmail ?? 'family-invite@partwk.com';
 
           return Card(
             elevation: 0,
@@ -1166,7 +1218,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                             const SizedBox(width: 10),
                             Flexible(
                               child: Text(
-                                localizations.translate('family_premium_sharing_title'),
+                                localizations.translate('family_invitation_pending_title'),
                                 style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1229,13 +1281,28 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     ),
                   ),
                   const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: _isFamilyBusy ? null : () => _cancelInvitation(invitedEmail),
-                    icon: const Icon(Icons.cancel_outlined, size: 18),
-                    label: Text(localizations.translate('family_cancel_invite_btn')),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: theme.colorScheme.error,
-                      side: BorderSide(color: theme.colorScheme.error.withOpacity(0.4)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, size: 18, color: theme.colorScheme.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            localizations.translate('family_slot_locked_note'),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              height: 1.4,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

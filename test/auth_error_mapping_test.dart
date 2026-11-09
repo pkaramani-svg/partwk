@@ -197,7 +197,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify Kurdish safe message
-      const kuMsg = 'نەمانتوانی بچینە ژوورەوە. ئیمەیڵ و وشەی نهێنیت بپشکنە، یاخود هەژمارێکی نوێ دروست بکە.';
+      const kuMsg = 'ئیمەیڵەکت یان وشەی نهێنێکەت هەڵەیە، یان هەژمارت نییە';
       expect(find.text(kuMsg), findsOneWidget);
 
       final textWidget = tester.widget<Text>(find.text(kuMsg));
