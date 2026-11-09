@@ -288,13 +288,13 @@ const ContentManagement = () => {
     setLang(initialLang);
     setTitle(book.title?.[initialLang] || '');
     setAuthor(book.author?.[initialLang] || '');
-    setDescription(book.description?.[initialLang] || '');
-    const bookCategories = Array.isArray(book.categories) && book.categories.length > 0
+    const rawCategories = Array.isArray(book.categories) && book.categories.length > 0
       ? book.categories
       : (Array.isArray(book.categoryIds) && book.categoryIds.length > 0
         ? book.categoryIds
         : (book.category ? [book.category] : ['cat-productivity']));
-    setSelectedCategories(bookCategories);
+    const bookCategories = Array.from(new Set(rawCategories.filter(Boolean)));
+    setSelectedCategories(bookCategories.length > 0 ? bookCategories : ['cat-productivity']);
     setIsPremium(book.isPremium || false);
     setIsDownloadable(book.isDownloadable !== false);
     setIsPublished(book.isPublished !== false);
@@ -362,6 +362,10 @@ const ContentManagement = () => {
 
   const handleAddBook = async (e) => {
     e.preventDefault();
+    if (!selectedCategories || selectedCategories.length === 0) {
+      alert("Please select at least one category.");
+      return;
+    }
     if (!coverFile && !editingBookId) {
       alert("Please select a cover image.");
       return;
@@ -508,7 +512,7 @@ const ContentManagement = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
+          <button className="btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
             <Plus size={18} />
             Add New Book
           </button>
@@ -736,13 +740,15 @@ const ContentManagement = () => {
             >
               <X size={28} />
             </button>
-            <h2 style={{ marginBottom: '24px', fontSize: '24px', fontWeight: 'bold' }}>Upload Multi-Chapter Book</h2>
+            <h2 style={{ marginBottom: '24px', fontSize: '24px', fontWeight: 'bold' }}>
+              {editingBookId ? 'Edit Book' : 'Add / Generate New Book'}
+            </h2>
             
             <form onSubmit={handleAddBook} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               
               {/* Header Configuration */}
-              <div style={{ display: 'flex', gap: '20px', background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '12px' }}>
-                <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '12px' }}>
+                <div style={{ flex: '1 1 200px', minWidth: '180px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#94A3B8' }}>Content Language</label>
                   <select className="input-field" value={lang} onChange={e => handleLanguageChange(e.target.value)} style={{ width: '100%' }}>
                     <option value="en">English (EN)</option>
@@ -750,7 +756,7 @@ const ContentManagement = () => {
                     <option value="ar">Arabic (AR)</option>
                   </select>
                 </div>
-                <div style={{ flex: 1, minWidth: '320px' }}>
+                <div style={{ flex: '1 1 320px', minWidth: '240px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#94A3B8' }}>
                     Categories ({selectedCategories.length} selected)
                   </label>
@@ -777,7 +783,7 @@ const ContentManagement = () => {
                                 setSelectedCategories(selectedCategories.filter(c => c !== id));
                               }
                             } else {
-                              setSelectedCategories([...selectedCategories, id]);
+                              setSelectedCategories(Array.from(new Set([...selectedCategories, id])));
                             }
                           }}
                           style={{
