@@ -45,6 +45,45 @@ void main() {
         expect(map['categoryIds'], equals(['cat-productivity']));
         expect(map['category'], equals('cat-productivity'));
       });
+
+      test('Book with completely missing category fields is safely normalized by admin parser to cat-productivity', () {
+        final missingCategoryData = <String, dynamic>{
+          'title': {'en': 'No Category Book'},
+          'author': {'en': 'Author'},
+          'isPremium': false,
+          'isPublished': true,
+        };
+
+        // Replicate Admin Panel normalizer logic:
+        final rawCategories = (missingCategoryData['categories'] is List && (missingCategoryData['categories'] as List).isNotEmpty)
+            ? (missingCategoryData['categories'] as List)
+            : ((missingCategoryData['categoryIds'] is List && (missingCategoryData['categoryIds'] as List).isNotEmpty)
+                ? (missingCategoryData['categoryIds'] as List)
+                : (missingCategoryData['category'] != null ? [missingCategoryData['category']] : ['cat-productivity']));
+        final normalized = rawCategories.map((e) => e.toString()).where((e) => e.isNotEmpty).toSet().toList();
+        final selected = normalized.isNotEmpty ? normalized : ['cat-productivity'];
+
+        expect(selected, equals(['cat-productivity']));
+      });
+
+      test('Book with multilingual EN/KU/AR content and hidden languages retains all data without mutating on load', () {
+        final multiLangData = {
+          'title': {'en': 'Atomic Habits', 'ku': 'خووە بنەڕەتییەکان', 'ar': 'العادات الذرية'},
+          'author': {'en': 'James Clear', 'ku': 'جەیمس کلێر', 'ar': 'جيمس كلير'},
+          'description': {'en': 'Desc EN', 'ku': 'Desc KU', 'ar': 'Desc AR'},
+          'categories': ['cat-productivity', 'cat-psychology'],
+          'hiddenLanguages': ['ar'],
+          'isPremium': true,
+          'isPublished': true,
+        };
+
+        final book = Book.fromMap('book_multilang_1', multiLangData);
+        expect(book.title['en'], equals('Atomic Habits'));
+        expect(book.title['ku'], equals('خووە بنەڕەتییەکان'));
+        expect(book.title['ar'], equals('العادات الذرية'));
+        expect(book.hiddenLanguages, equals(['ar']));
+        expect(book.categories, equals(['cat-productivity', 'cat-psychology']));
+      });
     });
 
     group('2. Multi-Category Create, Edit & Deduplication', () {

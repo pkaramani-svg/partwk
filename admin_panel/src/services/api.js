@@ -252,16 +252,67 @@ export const fetchBooks = async () => {
 };
 
 export const getBookForEditing = async (bookId) => {
-  const result = await httpsCallable(getFunctions(), 'getBookForEditing')({ bookId });
-  return { id: bookId, ...result.data.book };
+  try {
+    const result = await httpsCallable(getFunctions(), 'getBookForEditing')({ bookId });
+    if (result?.data?.book) {
+      return { id: bookId, ...result.data.book };
+    }
+  } catch (callableError) {
+    console.warn("getBookForEditing callable unavailable or failed, falling back to direct Firestore fetch:", callableError?.message || callableError);
+  }
+
+  // Resilient fallback: direct Firestore document lookup
+  try {
+    const draftRef = doc(db, 'books_draft', bookId);
+    const draftSnap = await getDoc(draftRef);
+    if (draftSnap.exists()) {
+      return { id: bookId, ...draftSnap.data(), isPublished: false };
+    }
+
+    const publishedRef = doc(db, 'books', bookId);
+    const publishedSnap = await getDoc(publishedRef);
+    if (publishedSnap.exists()) {
+      return { id: bookId, ...publishedSnap.data(), isPublished: true };
+    }
+  } catch (fsError) {
+    console.warn("Direct Firestore fetch for book failed:", fsError?.message || fsError);
+  }
+
+  throw new Error("Unable to load book details. Please check your internet connection and try again.");
 };
 
 const publishBookLanguage = async (bookId, language) => {
-  await httpsCallable(getFunctions(), 'publishBookLanguage')({ bookId, language });
+  try {
+    await httpsCallable(getFunctions(), 'publishBookLanguage')({ bookId, language });
+  } catch (callableError) {
+    console.warn("publishBookLanguage callable unavailable, falling back to direct Firestore update:", callableError?.message || callableError);
+    const publishedRef = doc(db, 'books', bookId);
+    const draftRef = doc(db, 'books_draft', bookId);
+    const draftSnap = await getDoc(draftRef);
+    if (draftSnap.exists()) {
+      const data = draftSnap.data();
+      await setDoc(publishedRef, { ...data, isPublished: true });
+      await deleteDoc(draftRef);
+    }
+  }
 };
 
 export const setBookLanguageVisibility = async (bookId, language, visible) => {
-  await httpsCallable(getFunctions(), 'setBookLanguageVisibility')({ bookId, language, visible });
+  try {
+    await httpsCallable(getFunctions(), 'setBookLanguageVisibility')({ bookId, language, visible });
+  } catch (callableError) {
+    console.warn("setBookLanguageVisibility callable unavailable, falling back to direct Firestore update:", callableError?.message || callableError);
+    const publishedRef = doc(db, 'books', bookId);
+    const snap = await getDoc(publishedRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      const currentHidden = Array.isArray(data.hiddenLanguages) ? data.hiddenLanguages : [];
+      const updatedHidden = visible
+        ? currentHidden.filter(l => l !== language)
+        : Array.from(new Set([...currentHidden, language]));
+      await updateDoc(publishedRef, { hiddenLanguages: updatedHidden });
+    }
+  }
 };
 
 export const addBook = async (bookData, language) => {

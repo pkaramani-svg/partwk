@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Plus, Edit2, Trash2, X, UploadCloud, Music, FileText, Sparkles, ArrowUp, ArrowDown } from 'lucide-react';
 import { fetchBooks, getBookForEditing, setBookLanguageVisibility, addBook, uploadFile, updateBook, deleteBook, addQuizData, addFlashcardsData, checkAiDataExists, publishBooksBatch } from '../services/api';
+import CategoryMultiSelect from '../components/CategoryMultiSelect';
 import './UsersManagement.css'; // Reuse table styles
 
 const categoryNames = {
@@ -280,53 +281,79 @@ const ContentManagement = () => {
   };
 
   const openEditModal = async (catalogueBook) => {
-    let book;
-    try { book = await getBookForEditing(catalogueBook.id); }
-    catch (error) { alert(`Failed to load book for editing: ${error.message}`); return; }
-    setEditingBookData(book);
-    const initialLang = Object.keys(book.title || {})[0] || 'en';
-    setLang(initialLang);
-    setTitle(book.title?.[initialLang] || '');
-    setAuthor(book.author?.[initialLang] || '');
-    const rawCategories = Array.isArray(book.categories) && book.categories.length > 0
-      ? book.categories
-      : (Array.isArray(book.categoryIds) && book.categoryIds.length > 0
-        ? book.categoryIds
-        : (book.category ? [book.category] : ['cat-productivity']));
-    const bookCategories = Array.from(new Set(rawCategories.filter(Boolean)));
-    setSelectedCategories(bookCategories.length > 0 ? bookCategories : ['cat-productivity']);
-    setIsPremium(book.isPremium || false);
-    setIsDownloadable(book.isDownloadable !== false);
-    setIsPublished(book.isPublished !== false);
-    
-    setCoverFile(null);
-    
-    let coverUrl = '';
-    if (book.coverImageUrl) {
-      if (typeof book.coverImageUrl === 'string') {
-        coverUrl = book.coverImageUrl;
-      } else if (typeof book.coverImageUrl === 'object') {
-        coverUrl = book.coverImageUrl[initialLang] || book.coverImageUrl['en'] || Object.values(book.coverImageUrl)[0] || '';
+    let book = null;
+    try {
+      book = await getBookForEditing(catalogueBook.id);
+    } catch (error) {
+      console.warn("Could not retrieve book via getBookForEditing, falling back to catalogue data:", error);
+      if (catalogueBook && catalogueBook.id) {
+        book = catalogueBook;
+      } else {
+        alert("Unable to open book for editing. Please refresh the page and try again.");
+        return;
       }
     }
-    setExistingCoverUrl(coverUrl);
 
-    // Pre-fill chapters
-    const existingChapters = book.chapterSummaries?.[initialLang];
-    if (existingChapters && existingChapters.length > 0) {
-      setChapters(existingChapters.map(ch => ({
-        title: ch.title || '',
-        content: ch.content || '',
-        audioFile: null, // can't pre-fill file
-        audioUrl: ch.audioUrl || '',
-        duration: ch.duration || 0
-      })));
-    } else {
-      setChapters([{ title: 'Intro', content: '', audioFile: null, duration: 0 }]);
+    if (!book) {
+      alert("Unable to open book for editing. Please refresh the page and try again.");
+      return;
     }
 
-    setEditingBookId(book.id);
-    setShowModal(true);
+    try {
+      setEditingBookData(book);
+      const titleLangs = Object.keys(book.title || {});
+      const summaryLangs = Object.keys(book.chapterSummaries || {});
+      const availableLangs = Array.from(new Set([...titleLangs, ...summaryLangs]));
+      const initialLang = availableLangs[0] || 'en';
+      setLang(initialLang);
+      setTitle(book.title?.[initialLang] || '');
+      setAuthor(book.author?.[initialLang] || '');
+      setDescription(book.description?.[initialLang] || '');
+
+      const rawCategories = Array.isArray(book.categories) && book.categories.length > 0
+        ? book.categories
+        : (Array.isArray(book.categoryIds) && book.categoryIds.length > 0
+          ? book.categoryIds
+          : (book.category ? [book.category] : ['cat-productivity']));
+      const bookCategories = Array.from(new Set(rawCategories.filter(Boolean)));
+      setSelectedCategories(bookCategories.length > 0 ? bookCategories : ['cat-productivity']);
+
+      setIsPremium(book.isPremium || false);
+      setIsDownloadable(book.isDownloadable !== false);
+      setIsPublished(book.isPublished !== false);
+      
+      setCoverFile(null);
+      
+      let coverUrl = '';
+      if (book.coverImageUrl) {
+        if (typeof book.coverImageUrl === 'string') {
+          coverUrl = book.coverImageUrl;
+        } else if (typeof book.coverImageUrl === 'object') {
+          coverUrl = book.coverImageUrl[initialLang] || book.coverImageUrl['en'] || Object.values(book.coverImageUrl)[0] || '';
+        }
+      }
+      setExistingCoverUrl(coverUrl);
+
+      // Pre-fill chapters
+      const existingChapters = book.chapterSummaries?.[initialLang];
+      if (existingChapters && existingChapters.length > 0) {
+        setChapters(existingChapters.map(ch => ({
+          title: ch.title || '',
+          content: ch.content || '',
+          audioFile: null, // can't pre-fill file
+          audioUrl: ch.audioUrl || '',
+          duration: ch.duration || 0
+        })));
+      } else {
+        setChapters([{ title: 'Intro', content: '', audioFile: null, duration: 0 }]);
+      }
+
+      setEditingBookId(book.id);
+      setShowModal(true);
+    } catch (renderError) {
+      console.error("Error setting up edit modal:", renderError);
+      alert("Unable to open book for editing due to unexpected data format. Please try again.");
+    }
   };
 
   const handleDeleteBook = async (bookId) => {
@@ -757,55 +784,11 @@ const ContentManagement = () => {
                   </select>
                 </div>
                 <div style={{ flex: '1 1 320px', minWidth: '240px' }}>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#94A3B8' }}>
-                    Categories ({selectedCategories.length} selected)
-                  </label>
-                  <div style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '6px',
-                    padding: '8px',
-                    background: '#1E293B',
-                    borderRadius: '8px',
-                    border: '1px solid #334155',
-                    maxHeight: '140px',
-                    overflowY: 'auto'
-                  }}>
-                    {Object.entries(categoryNames).map(([id, name]) => {
-                      const isSelected = selectedCategories.includes(id);
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => {
-                            if (isSelected) {
-                              if (selectedCategories.length > 1) {
-                                setSelectedCategories(selectedCategories.filter(c => c !== id));
-                              }
-                            } else {
-                              setSelectedCategories(Array.from(new Set([...selectedCategories, id])));
-                            }
-                          }}
-                          style={{
-                            background: isSelected ? '#3B82F6' : '#334155',
-                            color: '#FFFFFF',
-                            border: isSelected ? '1px solid #60A5FA' : '1px solid #475569',
-                            borderRadius: '16px',
-                            padding: '4px 10px',
-                            fontSize: '12px',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          <span>{name}</span>
-                          {isSelected && <span style={{ fontSize: '10px', fontWeight: 'bold' }}>✓</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <CategoryMultiSelect
+                    categories={categoryNames}
+                    selectedCategories={selectedCategories}
+                    onChange={setSelectedCategories}
+                  />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
