@@ -62,7 +62,7 @@ class MockFamilyServiceTest extends FamilyService {
   }
 
   @override
-  Future<Map<String, dynamic>> invite(String email) async {
+  Future<Map<String, dynamic>> invite(String email, {String? language}) async {
     inviteCalled = true;
     invitedEmail = email;
     return {'message': 'Invitation sent'};

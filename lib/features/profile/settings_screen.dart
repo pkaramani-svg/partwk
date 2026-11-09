@@ -19,7 +19,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   final TextEditingController _familyEmailController = TextEditingController();
   bool _notificationsEnabled = true;
   Future<Map<String, dynamic>>? _familyStatusFuture;
@@ -28,9 +28,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _familyEmailController.addListener(_onEmailChanged);
     _checkNotificationState();
     _refreshFamilyStatus();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshFamilyStatus();
+    }
   }
 
   void _onEmailChanged() {
@@ -52,6 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _familyEmailController.removeListener(_onEmailChanged);
     _familyEmailController.dispose();
     super.dispose();
@@ -444,11 +453,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _isFamilyBusy = true);
     try {
-      await AppLocator.family.invite(email);
-      if (user != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('cached_family_invite_email_${user.id}', email);
-      }
+      await AppLocator.family.invite(email, language: localizations.locale.languageCode);
       _familyEmailController.clear();
       _showToast(localizations.translate('family_invite_success').replaceAll('{email}', email));
       _refreshFamilyStatus();
@@ -461,7 +466,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         err = localizations.translate('family_error_already_in_family');
       } else if (msg.contains('paid access') || msg.contains('independently paid')) {
         err = localizations.translate('family_error_paid_account');
-      } else if (msg.contains('reserved or active') || msg.contains('already in use')) {
+      } else if (msg.contains('reserved or active') || msg.contains('already in use') || msg.contains('slot is already')) {
         err = localizations.translate('family_error_slot_reserved');
       } else if (msg.contains('primary premium') || msg.contains('active primary')) {
         err = localizations.translate('family_error_not_primary');
@@ -502,11 +507,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _isFamilyBusy = true);
       try {
         await AppLocator.family.cancel();
-        final user = AppLocator.auth.currentUser;
-        if (user != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('cached_family_invite_email_${user.id}');
-        }
         _showToast(localizations.translate('family_cancel_success'));
         _refreshFamilyStatus();
       } catch (e) {
@@ -545,12 +545,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _isFamilyBusy = true);
       try {
         await AppLocator.family.remove();
-        final user = AppLocator.auth.currentUser;
-        if (user != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('cached_family_invite_email_${user.id}');
-          await prefs.remove('cached_family_member_email_${user.id}');
-        }
         _showToast(localizations.translate('family_remove_success'));
         _refreshFamilyStatus();
       } catch (e) {
@@ -1050,348 +1044,336 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final hasActiveMember = family?['memberUid'] != null;
         final hasPendingInvite = family?['invitation'] != null;
 
-        return FutureBuilder<SharedPreferences>(
-          future: SharedPreferences.getInstance(),
-          builder: (ctx, prefsSnap) {
-            final cachedEmail = prefsSnap.data?.getString('cached_family_invite_email_${user.id}');
+        // Sub-state A: Accepted Member
+        if (hasActiveMember) {
+          final memberEmail = family?['memberEmail'] ?? 'family-member@partwk.com';
 
-            // Sub-state A: Accepted Member
-            if (hasActiveMember) {
-              final memberEmail = family?['memberEmail'] ??
-                  family?['invitation']?['recipientEmail'] ??
-                  cachedEmail ??
-                  'family-member@partwk.com';
-
-              return Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.green.withOpacity(0.3)),
-                ),
-                color: Colors.green.withOpacity(0.05),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          return Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.green.withOpacity(0.3)),
+            ),
+            color: Colors.green.withOpacity(0.05),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Icon(Icons.family_restroom, color: theme.colorScheme.secondary, size: 24),
-                                const SizedBox(width: 10),
-                                Flexible(
-                                  child: Text(
-                                    localizations.translate('family_premium_sharing_title'),
-                                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.green.withOpacity(0.4)),
-                            ),
-                            child: Text(
-                              localizations.translate('family_slot_active_badge'),
-                              style: TextStyle(
-                                color: Colors.green[700],
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        localizations.translate('family_slot_in_use_desc'),
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: theme.cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: theme.dividerColor.withOpacity(0.3)),
-                        ),
+                      Expanded(
                         child: Row(
                           children: [
-                            const Icon(Icons.person_outline, size: 20),
-                            const SizedBox(width: 12),
-                            Expanded(
+                            Icon(Icons.family_restroom, color: theme.colorScheme.secondary, size: 24),
+                            const SizedBox(width: 10),
+                            Flexible(
                               child: Text(
-                                memberEmail,
-                                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                                localizations.translate('family_premium_sharing_title'),
+                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: _isFamilyBusy ? null : () => _removeFamilyMember(memberEmail),
-                        icon: const Icon(Icons.person_remove_outlined, size: 18),
-                        label: Text(localizations.translate('family_remove_member_btn')),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: theme.colorScheme.error,
-                          side: BorderSide(color: theme.colorScheme.error.withOpacity(0.4)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            // Sub-state B: Pending Invite
-            if (hasPendingInvite) {
-              final invitedEmail = family?['invitation']?['recipientEmail'] ??
-                  cachedEmail ??
-                  'family-invite@partwk.com';
-
-              return Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.orange.withOpacity(0.3)),
-                ),
-                color: Colors.orange.withOpacity(0.05),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Icon(Icons.family_restroom, color: theme.colorScheme.secondary, size: 24),
-                                const SizedBox(width: 10),
-                                Flexible(
-                                  child: Text(
-                                    localizations.translate('family_premium_sharing_title'),
-                                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.orange.withOpacity(0.4)),
-                            ),
-                            child: Text(
-                              localizations.translate('family_slot_reserved_badge'),
-                              style: TextStyle(
-                                color: Colors.orange[800],
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        localizations.translate('family_invitation_pending_title'),
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: Colors.orange[800],
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        localizations.translate('family_invitation_pending_desc'),
-                        style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: theme.cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: theme.dividerColor.withOpacity(0.3)),
+                          color: Colors.green.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.green.withOpacity(0.4)),
                         ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.mail_outline, size: 20),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                invitedEmail,
-                                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: _isFamilyBusy ? null : () => _cancelInvitation(invitedEmail),
-                        icon: const Icon(Icons.cancel_outlined, size: 18),
-                        label: Text(localizations.translate('family_cancel_invite_btn')),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: theme.colorScheme.error,
-                          side: BorderSide(color: theme.colorScheme.error.withOpacity(0.4)),
+                        child: Text(
+                          localizations.translate('family_slot_active_badge'),
+                          style: TextStyle(
+                            color: Colors.green[700],
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              );
-            }
-
-            // Sub-state C: No member and no invite pending (Available to invite)
-            final emailText = _familyEmailController.text.trim();
-            final isOwnEmail = user.email.isNotEmpty && emailText.toLowerCase() == user.email.toLowerCase();
-            final isValidEmailFormat = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(emailText);
-            final canInvite = isValidEmailFormat && !isOwnEmail && !_isFamilyBusy;
-
-            String? inlineError;
-            if (emailText.isNotEmpty) {
-              if (isOwnEmail) {
-                inlineError = localizations.translate('family_error_own_account');
-              } else if (!isValidEmailFormat && (emailText.contains('@') || emailText.length > 5)) {
-                inlineError = localizations.translate('family_invalid_email');
-              }
-            }
-
-            return Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: theme.dividerColor.withOpacity(0.2)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                  const SizedBox(height: 12),
+                  Text(
+                    localizations.translate('family_slot_in_use_desc'),
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: theme.dividerColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
                       children: [
-                        Icon(Icons.family_restroom, color: theme.colorScheme.secondary, size: 24),
-                        const SizedBox(width: 10),
-                        Text(
-                          localizations.translate('family_premium_sharing_title'),
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        const Icon(Icons.person_outline, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            memberEmail,
+                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      localizations.translate('family_share_plan_desc'),
-                      style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: _isFamilyBusy ? null : () => _removeFamilyMember(memberEmail),
+                    icon: const Icon(Icons.person_remove_outlined, size: 18),
+                    label: Text(localizations.translate('family_remove_member_btn')),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error,
+                      side: BorderSide(color: theme.colorScheme.error.withOpacity(0.4)),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      localizations.translate('family_email_input_label'),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Directionality(
-                      textDirection: TextDirection.ltr,
-                      child: TextField(
-                        controller: _familyEmailController,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.done,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        enabled: !_isFamilyBusy,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: localizations.translate('family_email_input_hint'),
-                          hintTextDirection: TextDirection.ltr,
-                          prefixIcon: const Icon(Icons.alternate_email, size: 20, color: Color(0xFFFF7B00)),
-                          filled: true,
-                          fillColor: theme.brightness == Brightness.dark
-                              ? const Color(0xFF1E293B).withOpacity(0.6)
-                              : Colors.grey.withOpacity(0.08),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFFF7B00), width: 1.5),
-                          ),
-                          errorBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: theme.colorScheme.error, width: 1.2),
-                          ),
-                          errorText: inlineError,
-                        ),
-                        onSubmitted: (_) {
-                          if (canInvite) _addFamilyMember();
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: canInvite ? _addFamilyMember : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF7B00),
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: const Color(0xFFFF7B00).withOpacity(0.32),
-                          disabledForegroundColor: Colors.white.withOpacity(0.45),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: canInvite ? 1 : 0,
-                        ),
-                        child: _isFamilyBusy
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.person_add_alt_1, size: 20),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    localizations.translate('family_invite_btn'),
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                  ),
-                                ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Sub-state B: Pending Invite
+        if (hasPendingInvite) {
+          final invitedEmail = family?['invitation']?['recipientEmail'] ?? 'family-invite@partwk.com';
+
+          return Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.orange.withOpacity(0.3)),
+            ),
+            color: Colors.orange.withOpacity(0.05),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Icon(Icons.family_restroom, color: theme.colorScheme.secondary, size: 24),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                localizations.translate('family_premium_sharing_title'),
+                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
                               ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                        ),
+                        child: Text(
+                          localizations.translate('family_slot_reserved_badge'),
+                          style: TextStyle(
+                            color: Colors.orange[800],
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    localizations.translate('family_invitation_pending_title'),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: Colors.orange[800],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    localizations.translate('family_invitation_pending_desc'),
+                    style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: theme.dividerColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.mail_outline, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            invitedEmail,
+                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: _isFamilyBusy ? null : () => _cancelInvitation(invitedEmail),
+                    icon: const Icon(Icons.cancel_outlined, size: 18),
+                    label: Text(localizations.translate('family_cancel_invite_btn')),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error,
+                      side: BorderSide(color: theme.colorScheme.error.withOpacity(0.4)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Sub-state C: No member and no invite pending (Available to invite)
+        final emailText = _familyEmailController.text.trim();
+        final isOwnEmail = user.email.isNotEmpty && emailText.toLowerCase() == user.email.toLowerCase();
+        final isValidEmailFormat = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(emailText);
+        final canInvite = isValidEmailFormat && !isOwnEmail && !_isFamilyBusy;
+
+        String? inlineError;
+        if (emailText.isNotEmpty) {
+          if (isOwnEmail) {
+            inlineError = localizations.translate('family_error_own_account');
+          } else if (!isValidEmailFormat && (emailText.contains('@') || emailText.length > 5)) {
+            inlineError = localizations.translate('family_invalid_email');
+          }
+        }
+
+        return Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: theme.dividerColor.withOpacity(0.2)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.family_restroom, color: theme.colorScheme.secondary, size: 24),
+                    const SizedBox(width: 10),
+                    Text(
+                      localizations.translate('family_premium_sharing_title'),
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
-              ),
-            );
-          },
+                const SizedBox(height: 8),
+                Text(
+                  localizations.translate('family_share_plan_desc'),
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  localizations.translate('family_email_input_label'),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: TextField(
+                    controller: _familyEmailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.done,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    enabled: !_isFamilyBusy,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: localizations.translate('family_email_input_hint'),
+                      hintTextDirection: TextDirection.ltr,
+                      prefixIcon: const Icon(Icons.alternate_email, size: 20, color: Color(0xFFFF7B00)),
+                      filled: true,
+                      fillColor: theme.brightness == Brightness.dark
+                          ? const Color(0xFF1E293B).withOpacity(0.6)
+                          : Colors.grey.withOpacity(0.08),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFFF7B00), width: 1.5),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: theme.colorScheme.error, width: 1.2),
+                      ),
+                      errorText: inlineError,
+                    ),
+                    onSubmitted: (_) {
+                      if (canInvite) _addFamilyMember();
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: canInvite ? _addFamilyMember : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF7B00),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFFF7B00).withOpacity(0.32),
+                      disabledForegroundColor: Colors.white.withOpacity(0.45),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: canInvite ? 1 : 0,
+                    ),
+                    child: _isFamilyBusy
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.person_add_alt_1, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                localizations.translate('family_invite_btn'),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

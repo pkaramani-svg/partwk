@@ -12,7 +12,8 @@ class FamilyService {
   }
 
   Future<Map<String, dynamic>> status() async => _call('getFamilyStatus');
-  Future<Map<String, dynamic>> invite(String email) => _call('inviteFamilyMember', {'email': email});
+  Future<Map<String, dynamic>> invite(String email, {String? language}) =>
+      _call('inviteFamilyMember', {'email': email, if (language != null) 'language': language});
   Future<Map<String, dynamic>> accept() => _call('acceptFamilyInvitation');
   Future<Map<String, dynamic>> cancel() => _call('cancelFamilyInvitation');
   Future<Map<String, dynamic>> remove() => _call('removeFamilyMember');

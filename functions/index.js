@@ -161,6 +161,134 @@ const getRenewalReminderEmailHTML = (name, expiryDate) => `
 </div>
 `;
 
+const getFamilyInvitationEmailHTML = (inviterName, recipientEmail, lang) => {
+  const isKu = lang === 'ku';
+  const isAr = lang === 'ar';
+  const appLink = "https://partwk.com";
+
+  if (isKu) {
+    return `
+<div dir="rtl" style="direction: rtl; text-align: right; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1E293B; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.08); border: 1px solid #E2E8F0;">
+  <div style="background-color: #ffffff; padding: 32px 24px; text-align: center; border-bottom: 4px solid #FF7B00;">
+    ${logoImg}
+    <h1 style="color: #0F172A; margin: 12px 0 0 0; font-size: 22px; font-weight: 700;">بانگهێشت کراویت بۆ پەرتوک خێزانی! 🌟</h1>
+  </div>
+  <div style="padding: 28px 24px;">
+    <p style="font-size: 16px; line-height: 1.6; margin-top: 0;">سڵاو،</p>
+    <p style="font-size: 16px; line-height: 1.6;"><strong>${inviterName || 'بەکارهێنەرێکی پەرتوک'}</strong> تۆی بانگهێشت کردووە بۆ بەشداریکردنی خێزانی لە <strong>پەرتوک (Partwk Family Sharing)</strong>.</p>
+    
+    <div style="background-color: #FFF7ED; border-right: 4px solid #FF7B00; padding: 16px; border-radius: 8px; margin: 20px 0;">
+      <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #9A3412;">
+        <strong>تایبەتمەندی بەشداریکردن:</strong> تۆ دەستڕاگەیشتنی تەواوی پریمیۆم (Premium) بەدەستدەهێنیت لەڕێگەی بەشداریکردنی سەرەکییەوە بە بێبەرامبەر.
+      </p>
+    </div>
+
+    <p style="font-size: 15px; line-height: 1.6; color: #475569;">
+      دەستڕاگەیشتنی پریمیۆمەکەت بەردەوام دەبێت هەتاوەکو بەشداریکردنی سەرەکی چالاک بێت، و خۆکارانە کۆتایی دێت کاتێک بەشداریکردنی سەرەکی بەسەربچێت یان خاوەنی هەژمارەکە تۆ لابدات یان پلانی خێزانی جێبهێڵێت.
+    </p>
+
+    <div style="margin: 24px 0; background: #F8FAFC; padding: 20px; border-radius: 10px; border: 1px solid #E2E8F0;">
+      <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #0F172A;">چۆنێتی چالاککردنی پریمیۆم:</h3>
+      <ol style="margin: 0; padding-right: 20px; font-size: 15px; line-height: 1.8; color: #334155;">
+        <li>بە هەمان ئەم ناونیشانی ئیمەیڵەی خۆت (<strong>${recipientEmail}</strong>) لە پەرتوک بچۆ ژوورەوە یان هەژمارێکی نوێ دروستبکە.</li>
+        <li>لەناو ئەپڵیکەیشن بچۆ بۆ <strong>ڕێکخستنەکان (Settings) ← بەشداریکردنی خێزانی (Family Sharing)</strong>.</li>
+        <li>کرتە بکە لەسەر <strong>قبوڵکردنی بانگهێشتنامە</strong> بۆ چالاککردنی دەستبەجێی تایبەتمەندییەکان.</li>
+      </ol>
+    </div>
+
+    <p style="font-size: 15px; line-height: 1.6; color: #475569;">
+      لە کاتی چالاکبوونی پلانی خێزانیدا، دەتوانیت بە بێسنووری پوختەی سەدان پەرتووک بخوێنیتەوە و گوێیان لێ بگریت، دابەزاندنی ئۆفلاین بکەیت و لە هەموو مۆڵەتەکانی پریمیۆم سوودمەند بیت.
+    </p>
+
+    <div style="text-align: center; margin: 32px 0 16px 0;">
+      <a href="${appLink}" style="background-color: #FF7B00; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">کردنەوەی پەرتوک</a>
+    </div>
+  </div>
+</div>`;
+  }
+
+  if (isAr) {
+    return `
+<div dir="rtl" style="direction: rtl; text-align: right; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1E293B; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.08); border: 1px solid #E2E8F0;">
+  <div style="background-color: #ffffff; padding: 32px 24px; text-align: center; border-bottom: 4px solid #FF7B00;">
+    ${logoImg}
+    <h1 style="color: #0F172A; margin: 12px 0 0 0; font-size: 22px; font-weight: 700;">تمت دعوتك إلى بارتوك العائلي! 🌟</h1>
+  </div>
+  <div style="padding: 28px 24px;">
+    <p style="font-size: 16px; line-height: 1.6; margin-top: 0;">مرحبًا،</p>
+    <p style="font-size: 16px; line-height: 1.6;">دعاك <strong>${inviterName || 'أحد مستخدمي بارتوك'}</strong> للانضمام إلى خطة <strong>المشاركة العائلية في بارتوك (Partwk Family Sharing)</strong>.</p>
+    
+    <div style="background-color: #FFF7ED; border-right: 4px solid #FF7B00; padding: 16px; border-radius: 8px; margin: 20px 0;">
+      <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #9A3412;">
+        <strong>ميزة الاشتراك:</strong> ستحصل على وصول كامل وغير محدود إلى باقة بارتوك بريميوم (Premium) عبر المشترك الأساسي دون أي تكلفة إضافية.
+      </p>
+    </div>
+
+    <p style="font-size: 15px; line-height: 1.6; color: #475569;">
+      ينتهي وصولك إلى بريميوم تلقائيًا عند انتهاء اشتراك المشترك الأساسي، أو إذا قام المشترك الأساسي بإزالة العضو أو مغادرة الخطة العائلية.
+    </p>
+
+    <div style="margin: 24px 0; background: #F8FAFC; padding: 20px; border-radius: 10px; border: 1px solid #E2E8F0;">
+      <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #0F172A;">خطوات تفعيل الاشتراك:</h3>
+      <ol style="margin: 0; padding-right: 20px; font-size: 15px; line-height: 1.8; color: #334155;">
+        <li>سجّل الدخول أو أنشئ حسابًا جديدًا في بارتوك باستخدام نفس هذا البريد الإلكتروني (<strong>${recipientEmail}</strong>).</li>
+        <li>في التطبيق، انتقل إلى <strong>الإعدادات (Settings) ← المشاركة العائلية (Family Sharing)</strong>.</li>
+        <li>اضغط على <strong>قبول الدعوة</strong> لتفعيل باقة بريميوم فورًا.</li>
+      </ol>
+    </div>
+
+    <p style="font-size: 15px; line-height: 1.6; color: #475569;">
+      طالما أن الاشتراك العائلي نشط، يمكنك قراءة والاستماع إلى ملخصات الكتب بلا حدود والاستفادة من التحميل دون اتصال وكافة مزايا بريميوم.
+    </p>
+
+    <div style="text-align: center; margin: 32px 0 16px 0;">
+      <a href="${appLink}" style="background-color: #FF7B00; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">فتح تطبيق بارتوك</a>
+    </div>
+  </div>
+</div>`;
+  }
+
+  // English fallback
+  return `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1E293B; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.08); border: 1px solid #E2E8F0;">
+  <div style="background-color: #ffffff; padding: 32px 24px; text-align: center; border-bottom: 4px solid #FF7B00;">
+    ${logoImg}
+    <h1 style="color: #0F172A; margin: 12px 0 0 0; font-size: 22px; font-weight: 700;">You're Invited to Partwk Family Sharing! 🌟</h1>
+  </div>
+  <div style="padding: 28px 24px;">
+    <p style="font-size: 16px; line-height: 1.6; margin-top: 0;">Hi there,</p>
+    <p style="font-size: 16px; line-height: 1.6;"><strong>${inviterName || 'A Partwk member'}</strong> has invited you to join their <strong>Partwk Family Sharing</strong> plan.</p>
+    
+    <div style="background-color: #FFF7ED; border-left: 4px solid #FF7B00; padding: 16px; border-radius: 8px; margin: 20px 0;">
+      <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #9A3412;">
+        <strong>Your Benefit:</strong> You receive full Partwk Premium access through the primary subscriber at no additional cost.
+      </p>
+    </div>
+
+    <p style="font-size: 15px; line-height: 1.6; color: #475569;">
+      Your Premium access remains active as long as the primary subscriber's plan is active. It ends automatically if the primary subscription expires, or if the primary member removes or leaves the family plan.
+    </p>
+
+    <div style="margin: 24px 0; background: #F8FAFC; padding: 20px; border-radius: 10px; border: 1px solid #E2E8F0;">
+      <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #0F172A;">How to Activate Your Access:</h3>
+      <ol style="margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.8; color: #334155;">
+        <li>Sign in or create a Partwk account using this exact email address (<strong>${recipientEmail}</strong>).</li>
+        <li>Open <strong>Settings &rarr; Family Sharing</strong> in the app.</li>
+        <li>Tap <strong>Accept Invitation</strong> to immediately activate Premium.</li>
+      </ol>
+    </div>
+
+    <p style="font-size: 15px; line-height: 1.6; color: #475569;">
+      Once accepted, you will have unlimited access to read and listen to all book summaries, download editions offline, and explore all Premium features.
+    </p>
+
+    <div style="text-align: center; margin: 32px 0 16px 0;">
+      <a href="${appLink}" style="background-color: #FF7B00; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">Open Partwk</a>
+    </div>
+  </div>
+</div>`;
+};
+
 // ============================================================================
 // CLOUD FUNCTIONS
 // ============================================================================
@@ -628,12 +756,18 @@ async function projectMember(transaction, memberUid, ownerUid, expiresAt, state)
     ownerUid, memberUid, state, expiresAt: expiresAt || null, updatedAt: ts(),
   });
   transaction.set(db.doc(`entitlements/${memberUid}`), {
-    status: state === 'active' ? 'active' : 'inactive', source: state === 'active' ? 'family' : 'none', ownerUid: state === 'active' ? ownerUid : null,
-    expiresAt: state === 'active' ? expiresAt || null : null, updatedAt: ts(),
+    status: state === 'active' ? 'active' : 'inactive',
+    source: state === 'active' ? 'family' : 'none',
+    ownerUid: state === 'active' ? ownerUid : null,
+    expiresAt: state === 'active' ? expiresAt || null : null,
+    updatedAt: ts(),
+  }, { merge: true });
+  transaction.set(db.doc(`users/${memberUid}`), {
+    hasFamilyPremium: state === 'active',
   }, { merge: true });
 }
 
-exports.inviteFamilyMember = onCall(async (request) => {
+exports.inviteFamilyMember = onCall({ secrets: [smtpPass] }, async (request) => {
   const ownerUid = requireUser(request);
   const ownerEntPre = (await effectiveEntitlement(ownerUid)).data;
   if (!activeEntitlement(ownerEntPre) || ownerEntPre.source === 'family') {
@@ -641,50 +775,292 @@ exports.inviteFamilyMember = onCall(async (request) => {
   }
   const email = String(request.data?.email || '').trim().toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError('invalid-argument', 'Enter a valid email address.');
-  let recipient;
-  try { recipient = await admin.auth().getUserByEmail(email); } catch (_) {
-    // Do not reveal whether the address has an account.
-    return { acceptedForDelivery: true, message: 'If that account is eligible, it can view the invitation in Partwk.' };
+
+  // Find inviter details
+  let ownerName = '';
+  let ownerLang = String(request.data?.language || '').trim().toLowerCase();
+  try {
+    const ownerRecord = await admin.auth().getUser(ownerUid);
+    ownerName = ownerRecord.displayName || '';
+    const ownerDoc = await db.doc(`users/${ownerUid}`).get();
+    if (ownerDoc.exists) {
+      if (!ownerName && ownerDoc.data().name) ownerName = ownerDoc.data().name;
+      if (!ownerLang && ownerDoc.data().selectedLanguage) ownerLang = ownerDoc.data().selectedLanguage;
+    }
+  } catch (_) {}
+
+  // Check if recipient has an existing registered auth account
+  let recipient = null;
+  let recipientLang = '';
+  try {
+    recipient = await admin.auth().getUserByEmail(email);
+    if (recipient) {
+      const recipientDoc = await db.doc(`users/${recipient.uid}`).get();
+      if (recipientDoc.exists && recipientDoc.data().selectedLanguage) {
+        recipientLang = recipientDoc.data().selectedLanguage;
+      }
+    }
+  } catch (_) {
+    // Recipient has no account yet; invitation will be stored for subsequent claim
+    recipient = null;
   }
-  if (recipient.uid === ownerUid) throw new HttpsError('invalid-argument', 'You cannot invite your own account.');
+
+  if (recipient && recipient.uid === ownerUid) {
+    throw new HttpsError('invalid-argument', 'You cannot invite your own account.');
+  }
+
+  // Determine email language preference:
+  // 1. Recipient's saved app language
+  // 2. Inviter's selected app language
+  // 3. Fallback to English
+  let targetLang = 'en';
+  if (['en', 'ku', 'ar'].includes(recipientLang)) {
+    targetLang = recipientLang;
+  } else if (['en', 'ku', 'ar'].includes(ownerLang)) {
+    targetLang = ownerLang;
+  }
+
+  // Atomically reserve the one family slot
   await db.runTransaction(async transaction => {
-    const [ownerEnt, ownerFamily, recipientMember, recipientEnt] = await Promise.all([
-      effectiveEntitlement(ownerUid, transaction), transaction.get(db.doc(`families/${ownerUid}`)),
-      transaction.get(db.doc(`familyMemberships/${recipient.uid}`)), effectiveEntitlement(recipient.uid, transaction),
+    const [ownerEnt, ownerFamily] = await Promise.all([
+      effectiveEntitlement(ownerUid, transaction),
+      transaction.get(db.doc(`families/${ownerUid}`)),
     ]);
-    if (!activeEntitlement(ownerEnt.data) || ownerEnt.data.source === 'family') throw new HttpsError('failed-precondition', 'Only an active primary Premium subscriber can invite.');
-    if (recipientMember.exists && ['pending', 'active'].includes(recipientMember.data().state)) throw new HttpsError('failed-precondition', 'That account is already in a family relationship.');
-    if (activeEntitlement(recipientEnt.data) && recipientEnt.data.source !== 'family') throw new HttpsError('failed-precondition', 'That account has its own paid access and cannot join a family.');
+
+    if (!activeEntitlement(ownerEnt.data) || ownerEnt.data.source === 'family') {
+      throw new HttpsError('failed-precondition', 'Only an active primary Premium subscriber can invite.');
+    }
+
     const family = ownerFamily.exists ? ownerFamily.data() : {};
-    if (family.memberUid || family.invitation) throw new HttpsError('failed-precondition', 'Your one family slot is already reserved or active.');
-    transaction.set(db.doc(`families/${ownerUid}`), { ownerUid, invitation: { recipientUid: recipient.uid, recipientEmail: email, createdAt: ts() }, updatedAt: ts() }, { merge: true });
-    transaction.set(db.doc(`familyMemberships/${recipient.uid}`), { ownerUid, memberUid: recipient.uid, state: 'pending', updatedAt: ts() });
+    if (family.memberUid || family.invitation) {
+      throw new HttpsError('failed-precondition', 'Your one family slot is already reserved or active.');
+    }
+
+    if (recipient) {
+      const [recipientMember, recipientEnt] = await Promise.all([
+        transaction.get(db.doc(`familyMemberships/${recipient.uid}`)),
+        effectiveEntitlement(recipient.uid, transaction),
+      ]);
+      if (recipientMember.exists && ['pending', 'active'].includes(recipientMember.data().state)) {
+        throw new HttpsError('failed-precondition', 'That account is already in a family relationship.');
+      }
+      if (activeEntitlement(recipientEnt.data) && recipientEnt.data.source !== 'family') {
+        throw new HttpsError('failed-precondition', 'That account has its own paid access and cannot join a family.');
+      }
+    }
+
+    transaction.set(db.doc(`families/${ownerUid}`), {
+      ownerUid,
+      invitation: {
+        recipientUid: recipient ? recipient.uid : null,
+        recipientEmail: email,
+        createdAt: ts(),
+      },
+      updatedAt: ts(),
+    }, { merge: true });
+
+    if (recipient) {
+      transaction.set(db.doc(`familyMemberships/${recipient.uid}`), {
+        ownerUid,
+        memberUid: recipient.uid,
+        state: 'pending',
+        updatedAt: ts(),
+      });
+    }
   });
-  await writeAudit(ownerUid, 'family_invite_created', { recipientUid: recipient.uid });
-  return { acceptedForDelivery: true, message: 'Invitation created. The recipient can accept it in Partwk.' };
+
+  // Prepare email
+  let subject = '';
+  if (targetLang === 'ku') {
+    subject = `${ownerName || 'بەکارهێنەرێکی پەرتوک'} بانگهێشتی کردوویت بۆ بەشداریکردنی خێزانی لە پەرتوک`;
+  } else if (targetLang === 'ar') {
+    subject = `${ownerName || 'مستخدم في بارتوك'} دعاك للانضمام إلى بارتوك العائلي`;
+  } else {
+    subject = `${ownerName || 'A Partwk member'} invited you to Partwk Family Sharing`;
+  }
+
+  const htmlContent = getFamilyInvitationEmailHTML(ownerName, email, targetLang);
+
+  // Send invitation email via real SMTP
+  try {
+    await sendEmail(email, subject, htmlContent);
+  } catch (emailErr) {
+    console.error("Family invitation email delivery failed, rolling back slot reservation:", emailErr);
+    // Roll back slot reservation immediately so database state remains strictly consistent
+    await db.runTransaction(async rollbackTx => {
+      const familyRef = db.doc(`families/${ownerUid}`);
+      const famSnap = await rollbackTx.get(familyRef);
+      if (famSnap.exists && famSnap.data().invitation?.recipientEmail === email) {
+        rollbackTx.update(familyRef, {
+          invitation: FieldValue.delete(),
+          updatedAt: ts(),
+        });
+      }
+      if (recipient) {
+        rollbackTx.delete(db.doc(`familyMemberships/${recipient.uid}`));
+      }
+    }).catch(rbErr => console.error("Rollback failed:", rbErr));
+
+    throw new HttpsError('internal', 'Unable to send invitation email at this time. Please check your connection and try again.');
+  }
+
+  await writeAudit(ownerUid, 'family_invite_created', {
+    recipientUid: recipient ? recipient.uid : null,
+    recipientEmail: email,
+    language: targetLang,
+  });
+
+  return { acceptedForDelivery: true, message: 'Invitation sent successfully. The recipient can accept it in Partwk.' };
 });
 
 exports.getFamilyStatus = onCall(async (request) => {
   const uid = requireUser(request);
-  const [membership, family, entitlement] = await Promise.all([db.doc(`familyMemberships/${uid}`).get(), db.doc(`families/${uid}`).get(), db.doc(`entitlements/${uid}`).get()]);
-  return { membership: membership.exists ? membership.data() : null, family: family.exists ? family.data() : null, entitlement: entitlement.exists ? entitlement.data() : null };
+  let callerEmail = '';
+  try {
+    const userRecord = await admin.auth().getUser(uid);
+    callerEmail = (userRecord.email || '').toLowerCase().trim();
+  } catch (_) {}
+
+  let [membershipSnap, familySnap, entitlementSnap] = await Promise.all([
+    db.doc(`familyMemberships/${uid}`).get(),
+    db.doc(`families/${uid}`).get(),
+    db.doc(`entitlements/${uid}`).get(),
+  ]);
+
+  // 1. Safe automatic reconciliation of unlinked pending invitations:
+  // If the user has no active or pending membership doc, check if an unlinked invitation exists for their verified email.
+  if (callerEmail && (!membershipSnap.exists || !['active', 'pending'].includes(membershipSnap.data()?.state))) {
+    try {
+      const pendingInvites = await db.collection('families')
+        .where('invitation.recipientEmail', '==', callerEmail)
+        .limit(1)
+        .get();
+
+      if (!pendingInvites.empty) {
+        const familyDoc = pendingInvites.docs[0];
+        const ownerUid = familyDoc.id;
+        await db.runTransaction(async (t) => {
+          const fam = await t.get(familyDoc.ref);
+          if (fam.exists && fam.data().invitation?.recipientEmail === callerEmail && !fam.data().memberUid) {
+            t.update(familyDoc.ref, {
+              'invitation.recipientUid': uid,
+              updatedAt: ts(),
+            });
+            t.set(db.doc(`familyMemberships/${uid}`), {
+              ownerUid,
+              memberUid: uid,
+              state: 'pending',
+              updatedAt: ts(),
+            });
+          }
+        });
+        membershipSnap = await db.doc(`familyMemberships/${uid}`).get();
+      }
+    } catch (e) {
+      console.warn("Error reconciling pending family invitation by email:", e);
+    }
+  }
+
+  // 2. Safe idempotent compatibility repair:
+  // If this user is an active primary subscriber, but families/{uid} has no memberUid and no invitation,
+  // check if legacy users/{uid}.familyMembers exists and references an existing user.
+  if (activeEntitlement(entitlementSnap.exists ? entitlementSnap.data() : null) &&
+      entitlementSnap.data()?.source !== 'family' &&
+      familySnap.exists &&
+      !familySnap.data()?.memberUid &&
+      !familySnap.data()?.invitation) {
+    try {
+      const userDoc = await db.doc(`users/${uid}`).get();
+      const legacyMembers = userDoc.data()?.familyMembers;
+      if (Array.isArray(legacyMembers) && legacyMembers.length > 0) {
+        const legacyEmail = String(legacyMembers[0]).toLowerCase().trim();
+        if (legacyEmail) {
+          const legacyMemberUser = await admin.auth().getUserByEmail(legacyEmail).catch(() => null);
+          if (legacyMemberUser && legacyMemberUser.uid !== uid) {
+            const legacyMemberDoc = await db.doc(`users/${legacyMemberUser.uid}`).get();
+            const memberMem = await db.doc(`familyMemberships/${legacyMemberUser.uid}`).get();
+            if (legacyMemberDoc.data()?.hasFamilyPremium || memberMem.data()?.ownerUid === uid) {
+              const ownerEnt = entitlementSnap.data();
+              const expiresAt = ownerEnt?.expiresAt || null;
+              await db.runTransaction(async (t) => {
+                t.set(db.doc(`families/${uid}`), {
+                  ownerUid: uid,
+                  memberUid: legacyMemberUser.uid,
+                  memberEmail: legacyEmail,
+                  migratedFromLegacy: true,
+                  updatedAt: ts(),
+                }, { merge: true });
+                await projectMember(t, legacyMemberUser.uid, uid, expiresAt, 'active');
+              });
+              familySnap = await db.doc(`families/${uid}`).get();
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Legacy compatibility check error:", e);
+    }
+  }
+
+  return {
+    membership: membershipSnap.exists ? membershipSnap.data() : null,
+    family: familySnap.exists ? familySnap.data() : null,
+    entitlement: entitlementSnap.exists ? entitlementSnap.data() : null,
+  };
 });
 
 exports.acceptFamilyInvitation = onCall(async (request) => {
   const memberUid = requireUser(request);
+  let callerEmail = '';
+  try {
+    const userRec = await admin.auth().getUser(memberUid);
+    callerEmail = (userRec.email || '').toLowerCase().trim();
+  } catch (_) {}
+
   await db.runTransaction(async transaction => {
     const member = await transaction.get(db.doc(`familyMemberships/${memberUid}`));
-    if (!member.exists || member.data().state !== 'pending') throw new HttpsError('failed-precondition', 'No pending family invitation.');
+    if (!member.exists || member.data().state !== 'pending') {
+      throw new HttpsError('failed-precondition', 'No pending family invitation.');
+    }
     const m = member.data();
-    const [familySnap, ownerEnt, memberEnt] = await Promise.all([transaction.get(db.doc(`families/${m.ownerUid}`)), effectiveEntitlement(m.ownerUid, transaction), effectiveEntitlement(memberUid, transaction)]);
-    if (!familySnap.exists || familySnap.data().invitation?.recipientUid !== memberUid) throw new HttpsError('failed-precondition', 'This invitation is no longer valid.');
-    if (!activeEntitlement(ownerEnt.data)) throw new HttpsError('failed-precondition', 'The primary subscription is no longer active.');
-    if (activeEntitlement(memberEnt.data) && memberEnt.data.source !== 'family') throw new HttpsError('failed-precondition', 'Keep your independently paid subscription; it cannot be linked to a family plan.');
+    const [familySnap, ownerEnt, memberEnt] = await Promise.all([
+      transaction.get(db.doc(`families/${m.ownerUid}`)),
+      effectiveEntitlement(m.ownerUid, transaction),
+      effectiveEntitlement(memberUid, transaction),
+    ]);
+    if (!familySnap.exists) {
+      throw new HttpsError('failed-precondition', 'This invitation is no longer valid.');
+    }
+    const famData = familySnap.data();
+    const isMatchingRecipient = famData.invitation?.recipientUid === memberUid ||
+      (callerEmail && famData.invitation?.recipientEmail === callerEmail);
+
+    if (!isMatchingRecipient || famData.memberUid) {
+      throw new HttpsError('failed-precondition', 'This invitation is no longer valid.');
+    }
+    if (!activeEntitlement(ownerEnt.data)) {
+      throw new HttpsError('failed-precondition', 'The primary subscription is no longer active.');
+    }
+    if (activeEntitlement(memberEnt.data) && memberEnt.data.source !== 'family') {
+      throw new HttpsError('failed-precondition', 'Keep your independently paid subscription; it cannot be linked to a family plan.');
+    }
     const expiresAt = ownerEnt.data.expiresAt || null;
-    const recipientEmail = familySnap.data().invitation?.recipientEmail || null;
-    transaction.set(db.doc(`families/${m.ownerUid}`), { memberUid, memberEmail: recipientEmail, invitation: FieldValue.delete(), activatedAt: ts(), updatedAt: ts() }, { merge: true });
+    const recipientEmail = famData.invitation?.recipientEmail || callerEmail || null;
+
+    transaction.set(db.doc(`families/${m.ownerUid}`), {
+      memberUid,
+      memberEmail: recipientEmail,
+      invitation: FieldValue.delete(),
+      activatedAt: ts(),
+      updatedAt: ts(),
+    }, { merge: true });
+
     await projectMember(transaction, memberUid, m.ownerUid, expiresAt, 'active');
+    if (recipientEmail) {
+      transaction.set(db.doc(`users/${m.ownerUid}`), { familyMembers: [recipientEmail] }, { merge: true });
+    }
   });
+
   await writeAudit(memberUid, 'family_invitation_accepted', {});
   return { status: 'active' };
 });
@@ -692,30 +1068,59 @@ exports.acceptFamilyInvitation = onCall(async (request) => {
 exports.cancelFamilyInvitation = onCall(async (request) => {
   const ownerUid = requireUser(request);
   await db.runTransaction(async transaction => {
-    const familyRef = db.doc(`families/${ownerUid}`); const family = await transaction.get(familyRef);
-    if (!family.exists || !family.data().invitation) throw new HttpsError('failed-precondition', 'No pending invitation.');
+    const familyRef = db.doc(`families/${ownerUid}`);
+    const family = await transaction.get(familyRef);
+    if (!family.exists || !family.data().invitation) {
+      throw new HttpsError('failed-precondition', 'No pending invitation.');
+    }
     const recipientUid = family.data().invitation.recipientUid;
     transaction.update(familyRef, { invitation: FieldValue.delete(), updatedAt: ts() });
-    transaction.delete(db.doc(`familyMemberships/${recipientUid}`));
+    if (recipientUid) {
+      transaction.delete(db.doc(`familyMemberships/${recipientUid}`));
+    }
   });
-  await writeAudit(ownerUid, 'family_invitation_cancelled', {}); return { status: 'cancelled' };
+  await writeAudit(ownerUid, 'family_invitation_cancelled', {});
+  return { status: 'cancelled' };
 });
 
 async function endFamily(ownerUid, actorUid, action, override = false, auditDetails = {}) {
   let memberUid = null;
   await db.runTransaction(async transaction => {
-    const familyRef = db.doc(`families/${ownerUid}`); const family = await transaction.get(familyRef);
-    if (!family.exists || !family.data().memberUid) throw new HttpsError('failed-precondition', 'No active family member.');
+    const familyRef = db.doc(`families/${ownerUid}`);
+    const family = await transaction.get(familyRef);
+    if (!family.exists || !family.data().memberUid) {
+      throw new HttpsError('failed-precondition', 'No active family member.');
+    }
     memberUid = family.data().memberUid;
-    if (!override && actorUid !== ownerUid && actorUid !== memberUid) throw new HttpsError('permission-denied', 'Not a participant.');
-    transaction.set(familyRef, { memberUid: FieldValue.delete(), memberEmail: FieldValue.delete(), updatedAt: ts() }, { merge: true });
+    if (!override && actorUid !== ownerUid && actorUid !== memberUid) {
+      throw new HttpsError('permission-denied', 'Not a participant.');
+    }
+    transaction.set(familyRef, {
+      memberUid: FieldValue.delete(),
+      memberEmail: FieldValue.delete(),
+      updatedAt: ts(),
+    }, { merge: true });
     await projectMember(transaction, memberUid, ownerUid, null, 'removed');
+    transaction.set(db.doc(`users/${ownerUid}`), { familyMembers: [] }, { merge: true });
   });
-  await writeAudit(actorUid, action, { ownerUid, memberUid, override, ...auditDetails }); return { status: 'removed' };
+  await writeAudit(actorUid, action, { ownerUid, memberUid, override, ...auditDetails });
+  return { status: 'removed' };
 }
 exports.removeFamilyMember = onCall(async request => endFamily(requireUser(request), requireUser(request), 'family_member_removed'));
-exports.leaveFamily = onCall(async request => { const uid = requireUser(request); const m = await db.doc(`familyMemberships/${uid}`).get(); if (!m.exists || m.data().state !== 'active') throw new HttpsError('failed-precondition', 'No active family.'); return endFamily(m.data().ownerUid, uid, 'family_member_left'); });
-exports.adminOverrideFamilyRemoval = onCall(async request => { const actorUid = requireUser(request); if (!isAdminToken(request)) throw new HttpsError('permission-denied', 'Administrator required.'); const ownerUid = String(request.data?.ownerUid || ''); const reason = String(request.data?.reason || '').trim(); if (!ownerUid || !reason) throw new HttpsError('invalid-argument', 'Owner and reason are required.'); return endFamily(ownerUid, actorUid, 'family_admin_override_removal', true, { reason }); });
+exports.leaveFamily = onCall(async request => {
+  const uid = requireUser(request);
+  const m = await db.doc(`familyMemberships/${uid}`).get();
+  if (!m.exists || m.data().state !== 'active') throw new HttpsError('failed-precondition', 'No active family.');
+  return endFamily(m.data().ownerUid, uid, 'family_member_left');
+});
+exports.adminOverrideFamilyRemoval = onCall(async request => {
+  const actorUid = requireUser(request);
+  if (!isAdminToken(request)) throw new HttpsError('permission-denied', 'Administrator required.');
+  const ownerUid = String(request.data?.ownerUid || '');
+  const reason = String(request.data?.reason || '').trim();
+  if (!ownerUid || !reason) throw new HttpsError('invalid-argument', 'Owner and reason are required.');
+  return endFamily(ownerUid, actorUid, 'family_admin_override_removal', true, { reason });
+});
 
 // Store verification is fail-closed until App Store Server API / Google Play
 // Developer API credentials and product identifiers are configured. A client
