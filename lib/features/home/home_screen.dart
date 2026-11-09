@@ -19,6 +19,7 @@ import 'main_navigation.dart';
 import '../profile/settings_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../../core/services/user_notification_service.dart';
+import 'new_releases_carousel.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -29,6 +30,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final GlobalKey<NewReleasesCarouselState> _newReleasesKey = GlobalKey<NewReleasesCarouselState>();
   List<Book> _allBooks = [];
   List<Book> _filteredSuggestions = [];
   List<Category> _categories = [];
@@ -746,9 +748,20 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 4),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Column(
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.depth == 0) {
+            if (notification is ScrollStartNotification && notification.dragDetails != null) {
+              _newReleasesKey.currentState?.handleExternalScrollStart();
+            } else if (notification is ScrollEndNotification) {
+              _newReleasesKey.currentState?.handleExternalScrollEnd();
+            }
+          }
+          return false;
+        },
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 1. Daily Digest Section
@@ -861,7 +874,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              _buildHorizontalBookList(context, uniqueNewReleases, langCode, theme),
+              NewReleasesCarousel(
+                key: _newReleasesKey,
+                books: uniqueNewReleases,
+                langCode: langCode,
+                theme: theme,
+              ),
               const SizedBox(height: 24),
             ],
 
@@ -1074,6 +1092,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

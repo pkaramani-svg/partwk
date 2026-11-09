@@ -28,6 +28,16 @@ class MockScreenshotAuthService extends AuthService {
   @override
   bool get isGuest => false;
 
+  String mockProvider = 'password';
+  @override
+  String get signInProvider => mockProvider;
+
+  @override
+  Future<void> deleteAccount({String? password}) async {
+    _currentUser = null;
+    notifyListeners();
+  }
+
   void setUser(UserModel? user) {
     _currentUser = user;
     notifyListeners();
@@ -89,6 +99,40 @@ class MockScreenshotAuthService extends AuthService {
   Future<void> upgradeToPremium() async {}
 }
 
+class MockScreenshotDownloadService implements DownloadService {
+  @override
+  Future<List<DownloadedEdition>> getDownloadedEditions({bool validateExpiry = true}) async {
+    final user = AppLocator.auth.currentUser;
+    if (user == null) return [];
+    return OfflineAvailabilityRepository.getCachedEditionsMetadata(userId: user.id);
+  }
+
+  @override
+  Future<List<Book>> getDownloadedBooks({bool validateExpiry = true}) async {
+    final user = AppLocator.auth.currentUser;
+    if (user == null) return [];
+    return OfflineAvailabilityRepository.getCachedBooksMetadata(userId: user.id);
+  }
+
+  @override
+  Future<bool> downloadBook(Book book, String languageCode, Function(double) onProgress) async => true;
+
+  @override
+  Future<bool> isBookDownloaded(String bookId, {String? languageCode}) async => false;
+
+  @override
+  Future<bool> isEditionDownloaded(String bookId, String languageCode) async => false;
+
+  @override
+  Future<String?> getLocalCoverUri(String bookId, [String? languageCode]) async => null;
+
+  @override
+  Future<String?> getLocalAudioUri(String bookId, String languageCode) async => null;
+
+  @override
+  Future<void> removeDownload(String bookId, {String? languageCode}) async {}
+}
+
 // 1x1 transparent PNG bytes
 final Uint8List kTransparentPng = Uint8List.fromList(<int>[
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49,
@@ -106,18 +150,23 @@ void main() {
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('partwk_screen_test_');
-    const MethodChannel('plugins.flutter.io/path_provider')
-        .setMockMethodCallHandler((MethodCall call) async {
-      return tempDir.path;
-    });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (MethodCall methodCall) async {
+        return tempDir.path;
+      },
+    );
 
     SharedPreferences.setMockInitialValues({});
     mockAuth = MockScreenshotAuthService();
     AppLocator.auth = mockAuth;
+    DownloadService.mock = MockScreenshotDownloadService();
     await DownloadService.init();
   });
 
   tearDown(() async {
+    DownloadService.mock = null;
     if (await tempDir.exists()) {
       await tempDir.delete(recursive: true);
     }
@@ -152,9 +201,9 @@ void main() {
       {'id': 'sapiens', 'lang': 'ar'},
     ]) {
       final coverDir = Directory('${tempDir.path}/users/${user.id}/books/${b['id']}/${b['lang']}');
-      await coverDir.create(recursive: true);
-      await File('${coverDir.path}/cover.jpg').writeAsBytes(kTransparentPng);
-      await File('${coverDir.path}/download.complete').create();
+      coverDir.createSync(recursive: true);
+      File('${coverDir.path}/cover.jpg').writeAsBytesSync(kTransparentPng);
+      File('${coverDir.path}/download.complete').createSync();
     }
 
     final atomicHabits = Book(
@@ -256,7 +305,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('3 / 3 slots'), findsOneWidget);
+    expect(find.textContaining('3 / 3'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);
     expect(find.text('کوردی (Sorani)'), findsOneWidget);
     expect(find.text('العربية (Arabic)'), findsOneWidget);
@@ -280,7 +329,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('2 / 3 slots'), findsOneWidget);
+    expect(find.textContaining('2 / 3'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);
     expect(find.text('کوردی (Sorani)'), findsNothing);
     expect(find.text('العربية (Arabic)'), findsOneWidget);

@@ -36,6 +36,17 @@ class TestAuthService extends AuthService {
   @override
   bool get isGuest => _isGuest;
 
+  String mockProvider = 'password';
+  @override
+  String get signInProvider => mockProvider;
+
+  @override
+  Future<void> deleteAccount({String? password}) async {
+    _currentUser = null;
+    _isGuest = false;
+    notifyListeners();
+  }
+
   set currentUser(UserModel? user) {
     _currentUser = user;
     notifyListeners();
@@ -225,12 +236,12 @@ class TestDownloadService implements DownloadService {
   }
 
   @override
-  Future<List<Book>> getDownloadedBooks() async {
+  Future<List<Book>> getDownloadedBooks({bool validateExpiry = true}) async {
     return [];
   }
 
   @override
-  Future<List<DownloadedEdition>> getDownloadedEditions() async {
+  Future<List<DownloadedEdition>> getDownloadedEditions({bool validateExpiry = true}) async {
     return [];
   }
 

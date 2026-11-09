@@ -30,6 +30,17 @@ class MockDistributionAuthService extends AuthService {
   @override
   bool get isGuest => _isGuest;
 
+  String mockProvider = 'password';
+  @override
+  String get signInProvider => mockProvider;
+
+  @override
+  Future<void> deleteAccount({String? password}) async {
+    _currentUser = null;
+    _isGuest = false;
+    notifyListeners();
+  }
+
   void setUser(UserModel? user, {bool guest = false}) {
     _currentUser = user;
     _isGuest = guest;

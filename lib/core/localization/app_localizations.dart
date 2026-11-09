@@ -15,7 +15,7 @@ class AppLocalizations {
   static final Map<String, Map<String, String>> _localizedValues = {
     'ku': {
       'app_name': 'پەرتوک',
-      'tagline': 'پوختەی ئاستی بەرز و فێربوونی خێرا',
+      'tagline': 'پوختەی پڕیمیۆم و فێربوونی خێرا لە ١٥ خولەکدا',
       'splash_subtitle': 'بە زیرەکی فێربە، خێراتر پێش بکەوە',
       'onboarding_title_1': 'ئاستی زانستی جیهانی',
       'onboarding_desc_1': 'توانای بەدەست گەیشتن لە باشترین کتێبەکانی جیهان بە دەق و دەنگی بەرزکوالێتی.',
@@ -131,7 +131,7 @@ class AppLocalizations {
       'cancel_btn': 'هەڵوەشاندنەوە',
       'logout_title': 'چوونەدەرەوە',
       'logout_desc': 'دڵنیایت لە چوونەدەرەوە لە ئەژمارەکەت؟',
-      'logout_subtitle': 'چوونەدەرەوە لە دانیشتنی پرۆفایلەکەت',
+      'logout_subtitle': 'چوونەدەرەوە لە پرۆفایلەکەت',
       'logout_btn': 'چوونەدەرەوە',
       'reset_password_title': 'وشەی نهێنی نوێ بکەرەوە',
       'reset_password_email_hint': 'ئیمەیڵەکەت بنووسە',
@@ -394,7 +394,7 @@ class AppLocalizations {
     },
     'ar': {
       'app_name': 'بارتوك',
-      'tagline': 'ملخصات مميزة وتعلم سريع',
+      'tagline': 'ملخصات مميزة وتعلم سريع في 15 دقيقة',
       'splash_subtitle': 'تعلم بذكاء، وانمُ أسرع',
       'onboarding_title_1': 'معرفة ذات مستوى عالمي',
       'onboarding_desc_1': 'احصل على آلاف الأفكار الرئيسية من أفضل الكتب في العالم بنصوص وتسجيلات صوتية عالية الجودة.',
@@ -773,7 +773,7 @@ class AppLocalizations {
     },
     'en': {
       'app_name': 'Partwk',
-      'tagline': 'Premium summaries and fast learning',
+      'tagline': 'Premium summaries and fast learning in 15 minutes',
       'splash_subtitle': 'Learn smarter, grow faster',
       'onboarding_title_1': 'World-Class Knowledge',
       'onboarding_desc_1': 'Get thousands of key ideas from the world\'s best books in high-quality text and audio.',
