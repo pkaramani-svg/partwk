@@ -43,6 +43,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
   void _loadBookDetails() async {
     try {
+      await AppLocator.auth.refreshEntitlementAuthoritatively();
       final books = await AppLocator.db.fetchBooks();
       Book book;
       try {

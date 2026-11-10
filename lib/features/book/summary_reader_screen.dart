@@ -136,6 +136,7 @@ class _SummaryReaderScreenState extends State<SummaryReaderScreen> {
 
   void _loadBook() async {
     try {
+      await AppLocator.auth.refreshEntitlementAuthoritatively();
       final books = await AppLocator.db.fetchBooks();
       var book = books.firstWhere((b) => b.id == widget.bookId);
       final user = AppLocator.auth.currentUser;

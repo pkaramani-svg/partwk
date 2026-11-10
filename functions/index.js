@@ -843,8 +843,13 @@ exports.inviteFamilyMember = onCall({ secrets: [smtpPass] }, async (request) => 
     recipient = null;
   }
 
-  if (recipient && recipient.uid === ownerUid) {
-    throw new HttpsError('invalid-argument', 'You cannot invite your own account.');
+  if (recipient) {
+    if (recipient.disabled === true) {
+      throw new HttpsError('failed-precondition', 'That user account has been disabled.');
+    }
+    if (recipient.uid === ownerUid) {
+      throw new HttpsError('invalid-argument', 'You cannot invite your own account.');
+    }
   }
 
   // Determine email language preference:
@@ -878,15 +883,23 @@ exports.inviteFamilyMember = onCall({ secrets: [smtpPass] }, async (request) => 
     }
 
     if (recipient) {
-      const [recipientMember, recipientEnt] = await Promise.all([
+      const [recipientMember, recipientEnt, recipientFam] = await Promise.all([
         transaction.get(db.doc(`familyMemberships/${recipient.uid}`)),
         effectiveEntitlement(recipient.uid, transaction),
+        transaction.get(db.doc(`families/${recipient.uid}`)),
       ]);
       if (recipientMember.exists && ['pending', 'active'].includes(recipientMember.data().state)) {
         throw new HttpsError('failed-precondition', 'That account is already in a family relationship.');
       }
-      if (activeEntitlement(recipientEnt.data) && recipientEnt.data.source !== 'family') {
-        throw new HttpsError('failed-precondition', 'That account has its own paid access and cannot join a family.');
+      if (activeEntitlement(recipientEnt.data)) {
+        if (recipientEnt.data.source === 'family' && recipientEnt.data.ownerUid !== ownerUid) {
+          throw new HttpsError('failed-precondition', 'That account already has an active family subscription from another family.');
+        } else if (recipientEnt.data.source !== 'family') {
+          throw new HttpsError('failed-precondition', 'That account has its own paid access and cannot join a family.');
+        }
+      }
+      if (recipientFam.exists && (recipientFam.data().memberUid || recipientFam.data().invitation)) {
+        throw new HttpsError('failed-precondition', 'That account already owns another family.');
       }
     }
 
@@ -1247,12 +1260,19 @@ exports.adminUpdateFamilySlotEmail = onCall({ secrets: [smtpPass] }, async (requ
   }
 
   if (recipient) {
+    if (recipient.disabled === true) {
+      throw new HttpsError('failed-precondition', 'That user account has been disabled.');
+    }
     if (recipient.uid === ownerUid) {
       throw new HttpsError('invalid-argument', 'Cannot assign family slot to the owner themselves.');
     }
     const recEnt = (await effectiveEntitlement(recipient.uid)).data;
-    if (activeEntitlement(recEnt) && recEnt.source !== 'family') {
-      throw new HttpsError('failed-precondition', 'That account has its own paid access and cannot join a family.');
+    if (activeEntitlement(recEnt)) {
+      if (recEnt.source === 'family' && recEnt.ownerUid !== ownerUid) {
+        throw new HttpsError('failed-precondition', 'That account already has an active family subscription from another family.');
+      } else if (recEnt.source !== 'family') {
+        throw new HttpsError('failed-precondition', 'That account has its own paid access and cannot join a family.');
+      }
     }
     const recMem = await db.doc(`familyMemberships/${recipient.uid}`).get();
     if (recMem.exists && ['pending', 'active'].includes(recMem.data().state)) {

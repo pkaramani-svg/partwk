@@ -283,6 +283,37 @@ class LicenceManager {
     await OfflineAvailabilityRepository.removeBookMetadata(bookId, userId: userId);
   }
 
+  static Future<void> revokeAllDownloadedContentForUser(String userId) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final userBooksDir = Directory('${dir.path}/users/$userId/books');
+    if (await userBooksDir.exists()) {
+      try {
+        final entries = userBooksDir.listSync();
+        for (final entry in entries) {
+          if (entry is Directory) {
+            final bookId = entry.uri.pathSegments.where((s) => s.isNotEmpty).last;
+            await revokeDownloadedContent(userId, bookId);
+          }
+        }
+        await userBooksDir.delete(recursive: true);
+      } catch (e) {
+        // Continue cleanup
+      }
+    }
+    // Delete any language-scoped or base encryption keys from secure storage
+    try {
+      final allEntries = await _secureStorage.readAll();
+      final prefix = 'enc_key_${userId}_';
+      for (final k in allEntries.keys) {
+        if (k.startsWith(prefix)) {
+          await _secureStorage.delete(key: k);
+        }
+      }
+    } catch (_) {}
+
+    await OfflineAvailabilityRepository.clearAllMetadataForUser(userId);
+  }
+
   // --- Local Validation & Management ---
 
   static Future<File> _resolveLicenceFile(

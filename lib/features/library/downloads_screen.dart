@@ -25,6 +25,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }
 
   void _loadDownloads() async {
+    await AppLocator.auth.refreshEntitlementAuthoritatively();
     final editions = await DownloadService().getDownloadedEditions();
     if (mounted) {
       setState(() {

@@ -19,6 +19,7 @@ import 'package:dio/dio.dart';
 import '../../core/services/service_locator.dart';
 import 'network_guard.dart';
 import 'offline_availability_repository.dart';
+import 'licence_manager.dart';
 import 'analytics_service.dart';
 
 class FirebaseAuthService extends AuthService {
@@ -28,6 +29,8 @@ class FirebaseAuthService extends AuthService {
   UserModel? _currentUser;
   bool _isGuest = false;
   StreamSubscription<DocumentSnapshot>? _userDocSubscription;
+  StreamSubscription<DocumentSnapshot>? _entitlementDocSubscription;
+  StreamSubscription<DocumentSnapshot>? _familyMembershipSubscription;
   bool _isSigningIn = false;
 
   FirebaseAuthService() {
@@ -54,6 +57,10 @@ class FirebaseAuthService extends AuthService {
       } else {
         await _userDocSubscription?.cancel();
         _userDocSubscription = null;
+        await _entitlementDocSubscription?.cancel();
+        _entitlementDocSubscription = null;
+        await _familyMembershipSubscription?.cancel();
+        _familyMembershipSubscription = null;
         if (_currentUser != null) {
           await setOnlineStatus(false);
         }
@@ -72,6 +79,8 @@ class FirebaseAuthService extends AuthService {
 
   Future<void> _setupUserDocListener(String uid) async {
     await _userDocSubscription?.cancel();
+    await _entitlementDocSubscription?.cancel();
+    await _familyMembershipSubscription?.cancel();
     
     final prefs = await SharedPreferences.getInstance();
     String? localSessionId = prefs.getString('current_session_id');
@@ -97,6 +106,10 @@ class FirebaseAuthService extends AuthService {
             print("User is suspended! Logging out...");
             await _userDocSubscription?.cancel();
             _userDocSubscription = null;
+            await _entitlementDocSubscription?.cancel();
+            _entitlementDocSubscription = null;
+            await _familyMembershipSubscription?.cancel();
+            _familyMembershipSubscription = null;
             
             await signOut();
             triggerAccountSuspended();
@@ -108,6 +121,10 @@ class FirebaseAuthService extends AuthService {
             print("Double login detected! Expected $localSessionId but found $firestoreSessionId. Logging out...");
             await _userDocSubscription?.cancel();
             _userDocSubscription = null;
+            await _entitlementDocSubscription?.cancel();
+            _entitlementDocSubscription = null;
+            await _familyMembershipSubscription?.cancel();
+            _familyMembershipSubscription = null;
             
             await signOut();
             triggerDoubleLogin();
@@ -117,6 +134,122 @@ class FirebaseAuthService extends AuthService {
     }, onError: (e) {
       print("User doc stream error: $e");
     });
+
+    // Real-time listener on canonical entitlement projection
+    _entitlementDocSubscription = _firestore.collection('entitlements').doc(uid).snapshots().listen((entSnap) async {
+      await _handleEntitlementOrMembershipChange(uid, entDoc: entSnap);
+    }, onError: (e) {
+      debugPrint("Entitlement doc stream error: $e");
+    });
+
+    // Real-time listener on family membership state
+    _familyMembershipSubscription = _firestore.collection('familyMemberships').doc(uid).snapshots().listen((memSnap) async {
+      await _handleEntitlementOrMembershipChange(uid, memDoc: memSnap);
+    }, onError: (e) {
+      debugPrint("Family membership doc stream error: $e");
+    });
+  }
+
+  Future<void> _handleEntitlementOrMembershipChange(String uid, {DocumentSnapshot? entDoc, DocumentSnapshot? memDoc}) async {
+    if (_currentUser == null || _currentUser!.id != uid) return;
+
+    try {
+      final effectiveEnt = entDoc ?? await _firestore.collection('entitlements').doc(uid).get();
+      final effectiveMem = memDoc ?? await _firestore.collection('familyMemberships').doc(uid).get();
+      await _applyEntitlementUpdate(effectiveEnt, effectiveMem);
+    } catch (e) {
+      debugPrint("Error handling entitlement/membership change: $e");
+    }
+  }
+
+  Future<void> _applyEntitlementUpdate(DocumentSnapshot entDoc, DocumentSnapshot? memDoc) async {
+    if (_currentUser == null) return;
+    final uid = _currentUser!.id;
+    final bool wasFamilyPremium = _currentUser!.hasFamilyPremium;
+
+    final entData = entDoc.exists ? entDoc.data() as Map<String, dynamic>? : null;
+    final memData = memDoc != null && memDoc.exists ? memDoc.data() as Map<String, dynamic>? : null;
+
+    final expiresAt = entData?['expiresAt'];
+    final expiry = expiresAt is Timestamp ? expiresAt.toDate().toIso8601String() : null;
+    final bool activeEnt = entData?['status'] == 'active' &&
+        (expiry == null || DateTime.parse(expiry).isAfter(DateTime.now()));
+    final bool isFamilySource = entData?['source'] == 'family';
+    final bool memActive = memData == null || memData['state'] == 'active';
+
+    final bool isNowFamilyPremium = isFamilySource && activeEnt && memActive;
+    final bool isNowPaidPremium = !isFamilySource && activeEnt;
+
+    if (wasFamilyPremium && !isNowFamilyPremium) {
+      debugPrint('Family Premium revoked for user $uid. Executing immediate cleanup...');
+
+      _currentUser = _currentUser!.copyWith(
+        hasFamilyPremium: false,
+        subscriptionStatus: isNowPaidPremium ? 'premium' : 'free',
+        subscriptionExpiryDate: expiry,
+      );
+
+      // 1. Immediately cache updated user
+      await OfflineAvailabilityRepository.cacheUser(_currentUser!);
+
+      // 2. Stop active premium audio playback safely
+      try {
+        if (AppLocator.audio.isCurrentBookPremium && AppLocator.audio.isPlaying) {
+          AppLocator.audio.stop();
+        }
+      } catch (e) {
+        debugPrint('Error stopping audio on revocation: $e');
+      }
+
+      // 3. Clear/revoke downloaded premium editions, their local licences and decryption keys
+      try {
+        await LicenceManager.revokeAllDownloadedContentForUser(uid);
+      } catch (e) {
+        debugPrint('Error revoking downloaded content on family revocation: $e');
+      }
+
+      // 4. Refresh Settings/Profile/Library without requiring logout
+      notifyListeners();
+
+      // 5. Trigger notification stream to show clear localized message
+      triggerFamilyPremiumRevoked();
+    } else {
+      final String targetStatus = isNowFamilyPremium
+          ? 'free'
+          : (isNowPaidPremium ? 'premium' : _currentUser!.subscriptionStatus);
+
+      if (_currentUser!.hasFamilyPremium != isNowFamilyPremium ||
+          _currentUser!.subscriptionStatus != targetStatus ||
+          _currentUser!.subscriptionExpiryDate != expiry) {
+        _currentUser = _currentUser!.copyWith(
+          hasFamilyPremium: isNowFamilyPremium,
+          subscriptionStatus: targetStatus,
+          subscriptionExpiryDate: expiry ?? _currentUser!.subscriptionExpiryDate,
+        );
+        await OfflineAvailabilityRepository.cacheUser(_currentUser!);
+        notifyListeners();
+      }
+    }
+  }
+
+  @override
+  Future<void> refreshEntitlementAuthoritatively() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null || user.isAnonymous) return;
+    final uid = user.uid;
+
+    final hasInternet = await NetworkGuard.hasConnection();
+    if (!hasInternet) return;
+
+    try {
+      final results = await Future.wait([
+        _firestore.collection('entitlements').doc(uid).get(const GetOptions(source: Source.server)),
+        _firestore.collection('familyMemberships').doc(uid).get(const GetOptions(source: Source.server)),
+      ]);
+      await _applyEntitlementUpdate(results[0], results[1]);
+    } catch (e) {
+      debugPrint('Error during authoritative entitlement refresh: $e');
+    }
   }
 
   @override
@@ -624,6 +757,10 @@ class FirebaseAuthService extends AuthService {
   Future<void> signOut() async {
     await _userDocSubscription?.cancel();
     _userDocSubscription = null;
+    await _entitlementDocSubscription?.cancel();
+    _entitlementDocSubscription = null;
+    await _familyMembershipSubscription?.cancel();
+    _familyMembershipSubscription = null;
     if (_currentUser != null) {
       await setOnlineStatus(false);
     }

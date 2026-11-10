@@ -177,21 +177,58 @@ class PartwkApp extends StatefulWidget {
   State<PartwkApp> createState() => _PartwkAppState();
 }
 
-class _PartwkAppState extends State<PartwkApp> {
+class _PartwkAppState extends State<PartwkApp> with WidgetsBindingObserver {
   StreamSubscription<Book>? _celebrationSubscription;
   StreamSubscription<void>? _doubleLoginSubscription;
   StreamSubscription<void>? _accountSuspendedSubscription;
+  StreamSubscription<void>? _familyRevokedSubscription;
   StreamSubscription<Uri>? _linkSubscription;
   final _appLinks = AppLinks();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initDeepLinks();
     _celebrationSubscription = AppLocator.auth.completionCelebrationStream.listen((book) {
       final context = navigatorKey.currentContext;
       if (context != null) {
         showCompletionCelebrationPopup(context, book);
+      }
+    });
+
+    _familyRevokedSubscription = AppLocator.auth.familyPremiumRevokedStream.listen((_) {
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        final languageState = Provider.of<AppLanguageState>(context, listen: false);
+        final langCode = languageState.locale.languageCode;
+        final message = langCode == 'ku'
+            ? 'دەستپێڕاگەیشتنی پەرتوک پڕیمیۆمی خێزانیت کۆتایی هات.'
+            : (langCode == 'ar'
+                ? 'انتهت فترة وصولك إلى اشتراك العائلة بريميوم.'
+                : 'Your Family Premium access has ended.');
+        final title = langCode == 'ku'
+            ? 'پەرتوک پڕیمیۆم'
+            : (langCode == 'ar' ? 'بارتوك بريميوم' : 'Family Premium');
+        final btnText = langCode == 'ku' ? 'باشە' : (langCode == 'ar' ? 'موافق' : 'OK');
+
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (dialogContext) => Directionality(
+            textDirection: (langCode == 'ku' || langCode == 'ar') ? TextDirection.rtl : TextDirection.ltr,
+            child: AlertDialog(
+              title: Text(title),
+              content: Text(message),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(btnText),
+                ),
+              ],
+            ),
+          ),
+        );
       }
     });
 
@@ -320,10 +357,19 @@ class _PartwkAppState extends State<PartwkApp> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      AppLocator.auth.refreshEntitlementAuthoritatively();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _celebrationSubscription?.cancel();
     _doubleLoginSubscription?.cancel();
     _accountSuspendedSubscription?.cancel();
+    _familyRevokedSubscription?.cancel();
     _linkSubscription?.cancel();
     super.dispose();
   }

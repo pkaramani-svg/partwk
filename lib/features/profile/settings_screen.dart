@@ -48,6 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   }
 
   Future<void> _refreshFamilyStatus() async {
+    AppLocator.auth.refreshEntitlementAuthoritatively();
     setState(() {
       _familyStatusFuture = AppLocator.family.status();
     });

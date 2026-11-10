@@ -33,6 +33,7 @@ class _SavedLibraryScreenState extends State<SavedLibraryScreen> {
   }
 
   void _loadSaved() async {
+    AppLocator.auth.refreshEntitlementAuthoritatively();
     final allBooks = await AppLocator.db.fetchBooks();
     final user = AppLocator.auth.currentUser;
     if (user != null) {

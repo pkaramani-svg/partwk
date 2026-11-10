@@ -127,7 +127,7 @@ const UsersManagement = () => {
     const mem = familyMemberships.find(m => m.id === user.id);
 
     // Check if recipient of a pending invitation by email
-    const pendingFamInvite = !mem && families.find(f => 
+    const pendingFamInvite = families.find(f => 
       f.invitation?.recipientEmail && 
       user.email && 
       f.invitation.recipientEmail.toLowerCase() === user.email.toLowerCase()
@@ -158,7 +158,7 @@ const UsersManagement = () => {
         ownerUid: mem.ownerUid,
       };
     }
-    if (mem?.state === 'pending' || pendingFamInvite) {
+    if (mem?.state === 'pending' || (pendingFamInvite && mem?.state !== 'active')) {
       const invFam = pendingFamInvite || families.find(f => f.id === mem?.ownerUid);
       const owner = users.find(u => u.id === (mem?.ownerUid || invFam?.id));
       return {
@@ -790,21 +790,19 @@ const UsersManagement = () => {
                                           throw new Error(res?.message || 'Server did not confirm success.');
                                         }
 
-                                        // 2. Refetch canonical data
-                                        const [refetchedFamilies, refetchedMemberships, refetchedEntitlements, refetchedUsers] = await Promise.all([
-                                          fetchFamilies(),
-                                          fetchFamilyMemberships(),
-                                          fetchEntitlements(),
-                                          fetchUsers(),
+                                        // 2. Authoritative refetch of modified documents directly
+                                        const [updatedFamSnap, oldEntSnap, oldMemSnap] = await Promise.all([
+                                          getDoc(doc(db, 'families', selectedUser.id)),
+                                          res.oldUid ? getDoc(doc(db, 'entitlements', res.oldUid)) : Promise.resolve(null),
+                                          res.oldUid ? getDoc(doc(db, 'familyMemberships', res.oldUid)) : Promise.resolve(null),
                                         ]);
 
-                                        // 3. Verify canonical state proves the change
-                                        const updatedFam = refetchedFamilies.find(f => f.id === selectedUser.id);
-                                        if (!updatedFam) {
-                                          throw new Error('State verification failed: Owner family record not found.');
+                                        if (!updatedFamSnap.exists()) {
+                                          throw new Error('State verification failed: Owner family record not found on server.');
                                         }
+                                        const updatedFam = { id: updatedFamSnap.id, ...updatedFamSnap.data() };
                                         if ((updatedFam.lockedRecipientEmail || '').toLowerCase() !== normEmail) {
-                                          throw new Error(`State verification failed: Locked recipient is "${updatedFam.lockedRecipientEmail}", expected "${normEmail}".`);
+                                          throw new Error(`State verification failed: Locked recipient email mismatch (found "${updatedFam.lockedRecipientEmail}", expected "${normEmail}").`);
                                         }
                                         if (!updatedFam.invitation || (updatedFam.invitation.recipientEmail || '').toLowerCase() !== normEmail) {
                                           throw new Error('State verification failed: Pending invitation for new email was not created.');
@@ -813,19 +811,25 @@ const UsersManagement = () => {
                                           throw new Error('State verification failed: Old member is still assigned on family record.');
                                         }
 
-                                        // If old member had a UID, verify revocation
                                         if (res.oldUid) {
-                                          const oldEnt = refetchedEntitlements.find(e => e.id === res.oldUid);
+                                          const oldEnt = oldEntSnap?.data();
                                           if (oldEnt && oldEnt.source === 'family' && oldEnt.status === 'active') {
                                             throw new Error('State verification failed: Old member entitlement is still active.');
                                           }
-                                          const oldMem = refetchedMemberships.find(m => m.id === res.oldUid);
+                                          const oldMem = oldMemSnap?.data();
                                           if (oldMem && oldMem.state === 'active') {
                                             throw new Error('State verification failed: Old member family membership is still active.');
                                           }
                                         }
 
-                                        // 4. Update table and modal state
+                                        // 3. Reload full collections for the UI
+                                        const [refetchedFamilies, refetchedMemberships, refetchedEntitlements, refetchedUsers] = await Promise.all([
+                                          fetchFamilies(),
+                                          fetchFamilyMemberships(),
+                                          fetchEntitlements(),
+                                          fetchUsers(),
+                                        ]);
+
                                         setFamilies(refetchedFamilies);
                                         setFamilyMemberships(refetchedMemberships);
                                         setEntitlements(refetchedEntitlements);
@@ -841,9 +845,11 @@ const UsersManagement = () => {
                                         setShowCorrectEmailForm(false);
                                       } catch (err) {
                                         console.error('Support correction error:', err);
+                                        let errorMsg = err.message || String(err);
+                                        errorMsg = errorMsg.replace(/^FirebaseError:\s*/, '').replace(/^[a-z-]+:\s*/, '');
                                         setSupportFeedback({
                                           type: 'error',
-                                          message: err.message || 'Failed to update email: ' + String(err)
+                                          message: errorMsg
                                         });
                                         // Retain form values!
                                       } finally {

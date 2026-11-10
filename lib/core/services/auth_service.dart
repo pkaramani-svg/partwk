@@ -26,11 +26,19 @@ abstract class AuthService extends ChangeNotifier {
     _accountSuspendedController.add(null);
   }
 
+  final _familyPremiumRevokedController = StreamController<void>.broadcast();
+  Stream<void> get familyPremiumRevokedStream => _familyPremiumRevokedController.stream;
+
+  void triggerFamilyPremiumRevoked() {
+    _familyPremiumRevokedController.add(null);
+  }
+
   UserModel? get currentUser;
   bool get isAuthenticated;
   bool get isGuest;
   String get signInProvider;
   Future<void> initialize();
+  Future<void> refreshEntitlementAuthoritatively() async {}
   Future<void> signInWithEmailAndPassword(String email, String password);
   Future<void> registerWithEmailAndPassword(String name, String email, String password);
   Future<void> resetPassword(String email);
@@ -93,6 +101,11 @@ class MockAuthService extends AuthService {
   @override
   Future<void> initialize() async {
     // Mock instantly initialized
+  }
+
+  @override
+  Future<void> refreshEntitlementAuthoritatively() async {
+    // Mock refresh
   }
 
   @override

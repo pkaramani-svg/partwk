@@ -74,6 +74,12 @@ class OfflineAvailabilityRepository {
     await prefs.remove(_userCacheKey);
   }
 
+  static Future<void> clearAllMetadataForUser(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('cached_books_metadata_$userId');
+    await prefs.remove('cached_editions_metadata_$userId');
+  }
+
   static Future<void> cacheEditionMetadata(Book book, String languageCode, {String? userId}) async {
     final prefs = await SharedPreferences.getInstance();
     final key = _getEditionsMetadataKey(userId);
