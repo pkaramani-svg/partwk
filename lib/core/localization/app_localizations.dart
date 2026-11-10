@@ -12,6 +12,8 @@ class AppLocalizations {
 
   static const List<String> supportedLanguages = ['en', 'ku', 'ar'];
 
+  static Map<String, Map<String, String>> get localizedValues => _localizedValues;
+
   static final Map<String, Map<String, String>> _localizedValues = {
     'ku': {
       'app_name': 'پەرتوک',
@@ -147,7 +149,8 @@ class AppLocalizations {
       'auth_error_too_many_requests': 'هەوڵی زۆر دراوە. تکایە کەمێکی تر دووبارە هەوڵ بدەرەوە.',
       'auth_error_network': 'کێشەی هێڵ هەیە. تکایە هێڵی ئینتەرنێتەکەت بپشکنە و دووبارە هەوڵ بدەرەوە.',
       'auth_error_email_already_in_use': 'هەژمارێک بەم ئیمەیڵە پێشتر دروستکراوە. تکایە لەبری ئەوە بچۆ ژوورەوە.',
-      'auth_error_weak_password': 'وشەی نهێنی لاوازە. تکایە بەلایەنی کەمەوە 6 پیت یان ژمارە بەکاربهێنە.',
+      'auth_error_weak_password': 'وشەی نهێنییەکەت زۆر کورته. تکایە بەلایەنی کەمەوە ٦ پیت بەکاربهێنە.',
+      'password_too_short': 'وشەی نهێنییەکەت زۆر کورته. تکایە بەلایەنی کەمەوە ٦ پیت بەکاربهێنە.',
       'auth_error_generic': 'هەڵەیەکی چاوەڕواننەکراو ڕوویدا. تکایە کەمێکی تر دووبارە هەوڵ بدەرەوە.',
       'register_now': 'ئێستا تۆمار بکە',
       'continue_reading': 'بەردەوام بە لە خوێندنەوە',
@@ -315,7 +318,7 @@ class AppLocalizations {
       'day_sat': 'ش',
       'day_sun': 'ی',
       'choose_avatar_title': 'وێنۆچکەی پرۆفایل هەڵبژێرە',
-      'choose_avatar_desc': 'وێنۆچکەیەک هەڵبژێرە بۆ ناساندنی پرۆفایلەکەت لە پارتوک',
+      'choose_avatar_desc': 'وێنۆچکەیەک هەڵبژێرە بۆ ناساندنی پرۆفایلەکەت لە پەرتوک',
       'male_avatars': 'وێنۆچکەی پیاوان',
       'female_avatars': 'وێنۆچکەی خانمان',
       'animal_avatars': 'وێنۆچکەی ئاژەڵان',
@@ -336,7 +339,7 @@ class AppLocalizations {
       'family_invite_email_hint': 'name@example.com',
       'family_invite_btn': 'بانگهێشتکردنی ئەندامی خێزان',
       'family_invitation_pending_title': 'بانگهێشتنامە چاوەڕوانکراوە',
-      'family_invitation_pending_desc': 'شوێنی خێزانەکەت بۆ ئەم کەسە پارێزراوە. کاتێک لە پارتوک قبوڵی بکەن، دەستپێڕاگەیشتنی پڕیمیۆمیان چالاک دەبێت.',
+      'family_invitation_pending_desc': 'شوێنی خێزانەکەت بۆ ئەم کەسە پارێزراوە. کاتێک لە پەرتوک قبوڵی بکەن، دەستپێڕاگەیشتنی پڕیمیۆمیان چالاک دەبێت.',
       'family_cancel_invite_btn': 'هەڵوەشاندنەوەی بانگهێشت',
       'family_cancel_invite_title': 'هەڵوەشاندنەوەی بانگهێشتنامە',
       'family_cancel_invite_confirm': 'دڵنیایت لە هەڵوەشاندنەوەی ئەو بانگهێشتنامەیەی بۆ {email} نێردراوە؟',
@@ -346,12 +349,12 @@ class AppLocalizations {
       'family_remove_member_title': 'سڕینەوەی ئەندامی خێزان',
       'family_remove_member_confirm': 'دڵنیایت لە سڕینەوەی {email}؟ دەستبەجێ دەستپێڕاگەیشتنی بە تایبەتمەندییە پڕیمیۆمەکان لەدەست دەدات.',
       'family_premium_member_badge': 'پڕیمیۆم لە ڕێگەی هاوبەشکردنی خێزانی',
-      'family_premium_member_desc': 'تۆ لە تەواوی تایبەتمەندییە پڕیمیۆمەکانی پارتوک سوودمەند دەبیت لە ڕێگەی پلانی هاوبەشی خێزانەوە.',
+      'family_premium_member_desc': 'تۆ لە تەواوی تایبەتمەندییە پڕیمیۆمەکانی پەرتوک سوودمەند دەبیت لە ڕێگەی پلانی هاوبەشی خێزانەوە.',
       'family_leave_plan_btn': 'جێهێشتنی پلانی خێزان',
       'family_leave_plan_title': 'جێهێشتنی پلانی خێزان',
       'family_leave_plan_confirm': 'دڵنیایت لە جێهێشتنی ئەم پلانە خێزانییە؟ ئەژمارەکەت دەگەڕێتەوە بۆ دۆخی بێ بەرامبەر.',
       'family_received_invite_title': 'بانگهێشتنامەی خێزان بۆ تۆ هاتووە',
-      'family_received_invite_desc': 'بانگهێشت کراویت بۆ بەشداریکردن لە پلانی پڕیمیۆمی خێزانی پارتوک. قبوڵی بکە بۆ چالاککردنی پڕیمیۆمەکەت.',
+      'family_received_invite_desc': 'بانگهێشت کراویت بۆ بەشداریکردن لە پلانی پڕیمیۆمی خێزانی پەرتوک. قبوڵی بکە بۆ چالاککردنی پڕیمیۆمەکەت.',
       'family_accept_invite_btn': 'قبوڵکردنی بانگهێشت',
       'family_free_tier_desc': 'هاوبەشکردنی خێزانی تایبەتمەندییەکی تایبەتە بۆ بەشداربووانی پڕیمیۆم. بەرزبکەرەوە بۆ پڕیمیۆم بۆ هاوبەشکردن لەگەڵ خێزانەکەت.',
       'family_upgrade_plan_btn': 'پلانی پڕیمیۆم ببینە',
@@ -531,7 +534,8 @@ class AppLocalizations {
       'auth_error_too_many_requests': 'محاولات كثيرة جداً غير ناجحة. يرجى المحاولة مرة أخرى لاحقاً.',
       'auth_error_network': 'خطأ في الاتصال بالشبكة. يرجى التحقق من اتصالك بالإنترنت والمحاولة مجدداً.',
       'auth_error_email_already_in_use': 'يوجد حساب مسجل بهذا البريد الإلكتروني بالفعل. يرجى تسجيل الدخول بدلاً من ذلك.',
-      'auth_error_weak_password': 'كلمة المرور ضعيفة جداً. يرجى استخدام 6 أحرف أو أرقام على الأقل.',
+      'auth_error_weak_password': 'كلمة المرور قصيرة جداً. يرجى استخدام 6 أحرف على الأقل.',
+      'password_too_short': 'كلمة المرور قصيرة جداً. يرجى استخدام 6 أحرف على الأقل.',
       'auth_error_generic': 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى لاحقاً.',
       'register_now': 'سجل الآن',
       'continue_reading': 'متابعة القراءة',
@@ -915,7 +919,8 @@ class AppLocalizations {
       'auth_error_too_many_requests': 'Too many unsuccessful attempts. Please try again later.',
       'auth_error_network': 'Network error. Please check your internet connection and try again.',
       'auth_error_email_already_in_use': 'An account with this email already exists. Please sign in instead.',
-      'auth_error_weak_password': 'Password is too weak. Please use at least 6 characters.',
+      'auth_error_weak_password': 'Password is too short. Please use at least 6 characters.',
+      'password_too_short': 'Password is too short. Please use at least 6 characters.',
       'auth_error_generic': 'An unexpected error occurred. Please try again later.',
       'register_now': 'Register Now',
       'continue_reading': 'Continue Reading',

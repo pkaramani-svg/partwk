@@ -368,7 +368,7 @@ void main() {
       await tester.tap(find.byType(CustomButton));
       await tester.pumpAndSettle();
 
-      expect(find.text('Password is too weak. Please use at least 6 characters.'), findsOneWidget);
+      expect(find.text('Password is too short. Please use at least 6 characters.'), findsOneWidget);
     });
 
     testWidgets('Social login cancellation is dismissed silently without error banner', (tester) async {
@@ -414,6 +414,115 @@ void main() {
       // Technical string must not leak
       expect(find.textContaining('CRITICAL_INTERNAL_DB_CORRUPTION'), findsNothing);
       expect(find.text('An unexpected error occurred. Please try again later.'), findsOneWidget);
+    });
+
+    testWidgets('Password under 6 characters validation in English (EN)', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(wrapWithApp(
+        child: const LoginRegisterScreen(),
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField).at(0), 'user@test.com');
+      await tester.enterText(find.byType(TextFormField).at(1), '12345');
+      await tester.tap(find.byType(CustomButton));
+      await tester.pumpAndSettle();
+
+      const expectedEn = 'Password is too short. Please use at least 6 characters.';
+      expect(find.text(expectedEn), findsOneWidget);
+    });
+
+    testWidgets('Password under 6 characters validation in Kurdish Sorani (KU) with RTL layout', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(wrapWithApp(
+        child: const LoginRegisterScreen(),
+        locale: const Locale('ku'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField).at(0), 'user@test.com');
+      await tester.enterText(find.byType(TextFormField).at(1), '12345');
+      await tester.tap(find.byType(CustomButton));
+      await tester.pumpAndSettle();
+
+      const expectedKu = 'وشەی نهێنییەکەت زۆر کورته. تکایە بەلایەنی کەمەوە ٦ پیت بەکاربهێنە.';
+      expect(find.text(expectedKu), findsOneWidget);
+
+      // Verify Directionality is RTL
+      final textWidget = tester.widget<Text>(find.text(expectedKu));
+      expect(textWidget.textDirection ?? Directionality.of(tester.element(find.text(expectedKu))), TextDirection.rtl);
+    });
+
+    testWidgets('Password under 6 characters validation in Arabic (AR) with RTL layout', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(wrapWithApp(
+        child: const LoginRegisterScreen(),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField).at(0), 'user@test.com');
+      await tester.enterText(find.byType(TextFormField).at(1), '12345');
+      await tester.tap(find.byType(CustomButton));
+      await tester.pumpAndSettle();
+
+      const expectedAr = 'كلمة المرور قصيرة جداً. يرجى استخدام 6 أحرف على الأقل.';
+      expect(find.text(expectedAr), findsOneWidget);
+
+      // Verify Directionality is RTL
+      final textWidget = tester.widget<Text>(find.text(expectedAr));
+      expect(textWidget.textDirection ?? Directionality.of(tester.element(find.text(expectedAr))), TextDirection.rtl);
+    });
+
+    test('Verify no user-visible پارتوک exists in AppLocalizations and correct پەرتوک is present', () {
+      final kuMap = AppLocalizations.localizedValues['ku']!;
+      final arMap = AppLocalizations.localizedValues['ar']!;
+      final enMap = AppLocalizations.localizedValues['en']!;
+
+      for (final entry in kuMap.entries) {
+        expect(
+          entry.value.contains('پارتوک'),
+          isFalse,
+          reason: 'Key "${entry.key}" in Kurdish still contains incorrect spelling پارتوک: "${entry.value}"',
+        );
+      }
+
+      for (final entry in arMap.entries) {
+        expect(
+          entry.value.contains('پارتوک'),
+          isFalse,
+          reason: 'Key "${entry.key}" in Arabic contains پارتوک: "${entry.value}"',
+        );
+      }
+
+      for (final entry in enMap.entries) {
+        expect(
+          entry.value.contains('پارتوک'),
+          isFalse,
+          reason: 'Key "${entry.key}" in English contains پارتوک: "${entry.value}"',
+        );
+      }
+
+      // Check specific verified keys for correct پەرتوک rendering
+      expect(kuMap['choose_avatar_desc'], contains('پەرتوک'));
+      expect(kuMap['family_invitation_pending_desc'], contains('پەرتوک'));
+      expect(kuMap['family_premium_member_desc'], contains('پەرتوک'));
+      expect(kuMap['family_received_invite_desc'], contains('پەرتوک'));
+      expect(kuMap['family_slot_locked_note'], contains('پەرتوک'));
+      expect(kuMap['family_welcome_popup_title'], contains('پەرتوک'));
     });
   });
 }

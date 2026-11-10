@@ -307,85 +307,105 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     } else {
       final passwordController = TextEditingController();
       bool obscurePassword = true;
+      String? passwordError;
       password = await showDialog<String>(
         context: context,
         barrierDismissible: false,
         builder: (reauthCtx) {
           return StatefulBuilder(
             builder: (ctx, setDialogState) {
-              return AlertDialog(
-                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                title: Text(
-                  localizations.translate('reauth_required_title'),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      localizations.translate('reauth_required_desc'),
-                      style: const TextStyle(height: 1.4),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: passwordController,
-                      obscureText: obscurePassword,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: localizations.translate('password_hint'),
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          ),
-                          onPressed: () {
-                            setDialogState(() => obscurePassword = !obscurePassword);
-                          },
-                        ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
-                actions: [
-                  Row(
+              return Directionality(
+                textDirection: localizations.textDirection,
+                child: AlertDialog(
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                  title: Text(
+                    localizations.translate('reauth_required_title'),
+                    textAlign: localizations.isRtl ? TextAlign.right : TextAlign.left,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.of(reauthCtx).pop(null),
-                          child: Text(
-                            localizations.translate('cancel_btn'),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                      Text(
+                        localizations.translate('reauth_required_desc'),
+                        textAlign: localizations.isRtl ? TextAlign.right : TextAlign.left,
+                        style: const TextStyle(height: 1.4),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(context).colorScheme.error,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: passwordController,
+                        obscureText: obscurePassword,
+                        autofocus: true,
+                        textAlign: localizations.isRtl ? TextAlign.right : TextAlign.left,
+                        onChanged: (_) {
+                          if (passwordError != null) {
+                            setDialogState(() => passwordError = null);
+                          }
+                        },
+                        decoration: InputDecoration(
+                          hintText: localizations.translate('password_hint'),
+                          errorText: passwordError,
+                          errorMaxLines: 2,
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () {
+                              setDialogState(() => obscurePassword = !obscurePassword);
+                            },
                           ),
-                          onPressed: () {
-                            final pass = passwordController.text;
-                            Navigator.of(reauthCtx).pop(pass);
-                          },
-                          child: Text(
-                            localizations.translate('delete_account_btn'),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                         ),
                       ),
                     ],
                   ),
-                ],
+                  actions: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(reauthCtx).pop(null),
+                            child: Text(
+                              localizations.translate('cancel_btn'),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).colorScheme.error,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () {
+                              final pass = passwordController.text;
+                              if (pass.length < 6) {
+                                setDialogState(() {
+                                  passwordError = localizations.translate('password_too_short');
+                                });
+                                return;
+                              }
+                              Navigator.of(reauthCtx).pop(pass);
+                            },
+                            child: Text(
+                              localizations.translate('delete_account_btn'),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               );
             },
           );
@@ -423,6 +443,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         final errStr = e.toString().toLowerCase();
         if (errStr.contains('canceled') || errStr.contains('cancelled')) {
           _showToast(localizations.translate('reauth_canceled_msg'));
+        } else if (errStr.contains('weak-password') ||
+            errStr.contains('too short') ||
+            errStr.contains('at least 6')) {
+          _showToast(localizations.translate('password_too_short'));
         } else if (errStr.contains('wrong-password') ||
             errStr.contains('invalid-credential') ||
             errStr.contains('user-mismatch')) {

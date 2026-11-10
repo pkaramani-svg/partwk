@@ -297,9 +297,16 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
       return localizations.translate('auth_error_too_many_requests');
     }
 
-    // 6. Weak password
-    if (code == 'weak-password' || rawText.contains('weak-password')) {
-      return localizations.translate('auth_error_weak_password');
+    // 6. Weak password / Password too short
+    if (code == 'weak-password' ||
+        rawText.contains('weak-password') ||
+        rawText.contains('weak password') ||
+        rawText.contains('password must be') ||
+        rawText.contains('password should be') ||
+        rawText.contains('password is too short') ||
+        rawText.contains('password too short') ||
+        rawText.contains('at least 6')) {
+      return localizations.translate('password_too_short');
     }
 
     // 7. Network / offline problem
@@ -427,12 +434,17 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _passwordController,
+                  textAlign: localizations.isRtl ? TextAlign.right : TextAlign.left,
+                  textDirection: localizations.textDirection,
                   decoration: InputDecoration(
                     labelText: localizations.translate('password'),
                     prefixIcon: const Icon(Icons.lock_outline),
+                    errorMaxLines: 2,
                   ),
                   obscureText: true,
-                  validator: (val) => val == null || val.length < 6 ? 'Password too short' : null,
+                  validator: (val) => val == null || val.length < 6
+                      ? localizations.translate('password_too_short')
+                      : null,
                 ),
                 
                 // Forgot Password link
