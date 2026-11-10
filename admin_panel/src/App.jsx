@@ -7,9 +7,19 @@ import UsersManagement from './pages/UsersManagement';
 import ContentManagement from './pages/ContentManagement';
 import PopupManagement from './pages/PopupManagement';
 import Settings from './pages/Settings';
+import PageUnavailable from './components/PageUnavailable';
 import './App.css';
 
+function isAllowedAdminHostname() {
+  const host = window.location.hostname.toLowerCase();
+  return host === 'admin.partwk.com' || host === 'localhost' || host === '127.0.0.1';
+}
+
 function App() {
+  if (!isAllowedAdminHostname()) {
+    return <PageUnavailable />;
+  }
+
   return (
     <BrowserRouter>
       <Routes>
