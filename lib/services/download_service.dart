@@ -188,7 +188,7 @@ class DownloadService {
     if (url.isNotEmpty && url.startsWith('http')) {
       return NetworkImage(url);
     }
-    return const AssetImage('assets/images/partwk_logo.png');
+    return const AssetImage('assets/images/partwk_emblem.png');
   }
 
   /// Returns a Widget to show the book cover, with fallback to network and clean placeholder

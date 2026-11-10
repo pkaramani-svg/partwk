@@ -1,42 +1,93 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Support & Contact — Partwk</title>
+  <script>
+    (function() {
+      var host = window.location.hostname;
+      var allowed = ['partwk.com', 'www.partwk.com', 'localhost', '127.0.0.1'];
+      if (allowed.indexOf(host) === -1) {
+        document.documentElement.innerHTML = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page unavailable</title><style>body{background:#070b14;color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:20px}h1{font-size:24px;margin-bottom:8px;font-weight:600}p{color:#94a3b8;font-size:16px;margin:0}</style></head><body><div><h1>Page unavailable</h1><p>This page is not publicly available.</p></div></body></html>';
+        window.stop && window.stop();
+      }
+    })();
+  </script>
+  <title data-title-en="Support & Contact — Partwk" data-title-ku="پشتیوانی و پەیوەندی — پەرتوک" data-title-ar="الدعم والتواصل — بارتوك">Support &amp; Contact — Partwk</title>
   <meta name="description" content="Get support for Partwk. Contact our team for general inquiries, account assistance, or Family Sharing corrections.">
   <link rel="icon" type="image/png" href="/assets/app_icon.png">
   <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
+
+  <!-- Site Header -->
   <header class="site-header">
     <div class="header-inner">
-      <a href="/" class="brand-link">
-        <img src="/assets/app_icon.png" alt="Partwk Logo" class="brand-logo">
-        <span class="brand-title">Partwk <span class="kurdish-mark">پەرتوک</span></span>
+      <a href="/" class="brand-link" aria-label="Partwk Home">
+        <img src="/assets/logo.png" alt="Partwk Logo" class="brand-logo" width="40" height="40">
+        <span class="brand-title">
+          <span>Partwk</span>
+          <span class="kurdish-mark">پەرتوک</span>
+        </span>
       </a>
-      <nav class="main-nav" aria-label="Main Navigation">
-        <a href="/">Home</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/terms">Terms</a>
-        <a href="/delete-account">Delete Account</a>
-        <a href="/support" class="active">Support</a>
-      </nav>
+
+      <div class="header-right">
+        <nav class="main-nav" aria-label="Main Navigation">
+          <a href="/">
+            <span data-lang="en">Home</span>
+            <span data-lang="ku">سەرەتا</span>
+            <span data-lang="ar">الرئيسية</span>
+          </a>
+          <a href="/privacy">
+            <span data-lang="en">Privacy</span>
+            <span data-lang="ku">تایبەتمەندی</span>
+            <span data-lang="ar">الخصوصية</span>
+          </a>
+          <a href="/terms">
+            <span data-lang="en">Terms</span>
+            <span data-lang="ku">مەرجەکان</span>
+            <span data-lang="ar">الشروط</span>
+          </a>
+          <a href="/support" class="active">
+            <span data-lang="en">Support</span>
+            <span data-lang="ku">پشتیوانی</span>
+            <span data-lang="ar">الدعم</span>
+          </a>
+          <a href="/delete-account">
+            <span data-lang="en">Account</span>
+            <span data-lang="ku">سڕینەوەی هەژمار</span>
+            <span data-lang="ar">حذف الحساب</span>
+          </a>
+        </nav>
+
+        <div class="lang-switcher" role="group" aria-label="Language selection">
+          <button type="button" class="lang-btn active" data-lang-btn="en" aria-pressed="true">EN</button>
+          <button type="button" class="lang-btn" data-lang-btn="ku" aria-pressed="false">کوردی</button>
+          <button type="button" class="lang-btn" data-lang-btn="ar" aria-pressed="false">العربية</button>
+        </div>
+      </div>
     </div>
   </header>
 
+  <!-- Site Content -->
   <main class="site-content">
     <article class="doc-header">
-      <h1>Support & Contact</h1>
-      <p class="doc-meta">Published by ZENTORI STUDIOS LTD • We are here to help</p>
+      <h1 data-lang="en">Support &amp; Contact</h1>
+      <h1 data-lang="ku" style="display:none;">پشتیوانی و پەیوەندی</h1>
+      <h1 data-lang="ar" style="display:none;">الدعم والتواصل</h1>
+
+      <p class="doc-meta" data-lang="en">Published by <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> • We are here to help</p>
+      <p class="doc-meta" data-lang="ku" style="display:none;">بڵاوکراوەتەوە لەلایەن <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> • ئێمە لێرەین بۆ هاوکاریت</p>
+      <p class="doc-meta" data-lang="ar" style="display:none;">صادر عن <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> • نحن هنا للمساعدة</p>
     </article>
 
-    <div class="doc-body">
+    <!-- ENGLISH CONTENT -->
+    <div class="doc-body" data-lang="en">
       <p>Whether you need assistance with your account, have a question about our book summaries, or need help managing your Family Sharing subscription, our support team is available to assist you.</p>
 
       <div class="contact-grid">
         <div class="contact-card">
-          <h3>General & Technical Support</h3>
+          <h3>General &amp; Technical Support</h3>
           <p>For app feedback, account recovery, bug reports, and general inquiries:</p>
           <div class="email-badge">support@partwk.com</div>
           <p><a href="mailto:support@partwk.com" class="btn btn-secondary">Email Support</a></p>
@@ -53,7 +104,7 @@
       <h2>Frequently Asked Questions</h2>
 
       <h3>How do I reset my password?</h3>
-      <p>You can reset your password directly from the mobile app login screen by tapping <strong>Forgot Password?</strong> Enter your registered email address, and a secure password reset link will be sent to your inbox immediately via Google Firebase Authentication.</p>
+      <p>You can reset your password directly from the mobile app login screen by tapping <strong>Forgot Password?</strong>. Enter your registered email address, and a secure password reset link will be sent to your inbox immediately.</p>
 
       <h3>How does Family Sharing work?</h3>
       <p>A Primary subscriber on our Family plan can invite one family member to share Premium benefits. Once invited, the family slot is safeguarded with our locked recipient protocol. To correct or reassign a recipient email, please contact our support team at <a href="mailto:sharing@partwk.com">sharing@partwk.com</a>.</p>
@@ -66,32 +117,142 @@
 
       <h2>Company Information</h2>
       <div class="info-box">
-        <p><strong>ZENTORI STUDIOS LTD</strong><br>
-        Developer & Publisher of Partwk (پەرتوک)<br>
-        Official Website: <a href="https://partwk.com">https://partwk.com</a><br>
-        Administrative Subdomain: <a href="https://admin.partwk.com">https://admin.partwk.com</a></p>
+        <p><strong><a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a></strong><br>
+        Developer &amp; Publisher of Partwk (پەرتوک)<br>
+        Website: <a href="https://partwk.com">https://partwk.com</a><br>
+        Support: <a href="mailto:support@partwk.com">support@partwk.com</a></p>
+      </div>
+    </div>
+
+    <!-- KURDISH SORANI CONTENT -->
+    <div class="doc-body" data-lang="ku" style="display:none;">
+      <p>ئەگەر پێویستیت بە هاوکاری هەیە دەربارەی هەژمارەکەت، پرسیارت هەیە سەبارەت بە پوختەکان، یان پێویستیت بە یارمەتی هەیە لە بەشداری خێزانی، تیمەکەمان ئامادەیە بۆ یارمەتیدانت.</p>
+
+      <div class="contact-grid">
+        <div class="contact-card">
+          <h3>پشتیوانی گشتی و تەکنیکی</h3>
+          <p>بۆ فیدباک، وەرگرتنەوەی هەژمار، و پرسیارە گشتییەکان:</p>
+          <div class="email-badge">support@partwk.com</div>
+          <p><a href="mailto:support@partwk.com" class="btn btn-secondary">ئیمەیڵ بنێرە</a></p>
+        </div>
+
+        <div class="contact-card">
+          <h3>پشتیوانی هاوبەشکردنی خێزانی</h3>
+          <p>بۆ پرسیارەکانی تایبەت بە بانگهێشتی خێزانی و ڕێکخستنی ئەندام:</p>
+          <div class="email-badge">sharing@partwk.com</div>
+          <p><a href="mailto:sharing@partwk.com" class="btn btn-secondary">ئیمەیڵ بۆ بەشی خێزانی</a></p>
+        </div>
+      </div>
+
+      <h2>پرسیارە باوەکان</h2>
+
+      <h3>چۆن وشەی نهێنی بگۆڕم؟</h3>
+      <p>لە شاشەی چوونەژوورەوەی ئەپڵیکەیشن کلیک بکە لەسەر <strong>وشەی نهێنیت لەبیرچووە؟</strong> ئیمەیڵی تۆمارکراوت بنووسە، دەستبەجێ بەستەری گۆڕینی وشەی نهێنیت بۆ دەنێردرێت.</p>
+
+      <h3>هاوبەشکردنی خێزانی چۆن کاردەکات؟</h3>
+      <p>بەشداربووی سەرەکی دەتوانێت یەک ئەندامی خێزانەکەی بانگهێشت بکات بۆ بەکارهێنانی هەموو تایبەتمەندییەکان. بۆ هەر کێشەیەک لە ئیمەیڵی بانگهێشتکراودا، پەیوەندیمان پێوە بکەن لە ڕێگەی <a href="mailto:sharing@partwk.com">sharing@partwk.com</a>.</p>
+
+      <h3>چۆن هەژمارەکەم بسڕمەوە؟</h3>
+      <p>دەتوانیت لە ڕێگەی ئەپەکەوە بچیتە: <code>پرۆفایل ← ڕێکخستنەکان ← سڕینەوەی هەژمار</code>. یان ئیمەیڵ بنێریت بۆ <a href="mailto:support@partwk.com">support@partwk.com</a> بە ناونیشانی "داواکاری سڕینەوەی هەژمار".</p>
+
+      <h3>چ زمانێک بەردەستە لە پەرتوک؟</h3>
+      <p>پەرتوک سێ زمانی سەرەکی لەخۆدەگرێت: ئینگلیزی، کوردی سۆرانی، و عەرەبی. دەتوانیت لە هەر کاتێکدا لە ڕێکخستنەکان زمانەکە بگۆڕیت.</p>
+
+      <h2>زانیاری کۆمپانیا</h2>
+      <div class="info-box">
+        <p><strong><a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a></strong><br>
+        بەرهەمهێنەری پەرتوک<br>
+        ماڵپەڕ: <a href="https://partwk.com">https://partwk.com</a><br>
+        پشتیوانی: <a href="mailto:support@partwk.com">support@partwk.com</a></p>
+      </div>
+    </div>
+
+    <!-- ARABIC CONTENT -->
+    <div class="doc-body" data-lang="ar" style="display:none;">
+      <p>سواء كنت بحاجة إلى مساعدة في حسابك، أو لديك استفسار حول ملخصات الكتب، أو تحتاج إلى مساعدة في إدارة اشتراك المشاركة العائلية، فإن فريق الدعم لدينا مستعد دائماً لمساعدتك.</p>
+
+      <div class="contact-grid">
+        <div class="contact-card">
+          <h3>الدعم العام والفني</h3>
+          <p>للملاحظات، استعادة الحسابات، الإبلاغ عن المشاكل، والاستفسارات العامة:</p>
+          <div class="email-badge">support@partwk.com</div>
+          <p><a href="mailto:support@partwk.com" class="btn btn-secondary">مراسلة الدعم</a></p>
+        </div>
+
+        <div class="contact-card">
+          <h3>دعم المشاركة العائلية</h3>
+          <p>للاستفسارات المتعلقة بفتحات العائلة، الدعوات، أو تصحيح البريد:</p>
+          <div class="email-badge">sharing@partwk.com</div>
+          <p><a href="mailto:sharing@partwk.com" class="btn btn-secondary">مراسلة دعم العائلة</a></p>
+        </div>
+      </div>
+
+      <h2>الأسئلة الشائعة</h2>
+
+      <h3>كيف يمكنني إعادة تعيين كلمة المرور؟</h3>
+      <p>يمكنك إعادة تعيين كلمة المرور مباشرة من شاشة تسجيل الدخول في التطبيق بالنقر على <strong>نسيت كلمة المرور؟</strong>. أدخل بريدك الإلكتروني المسجل، وسيصلك رابط آمن وفوري لإعادة التعيين.</p>
+
+      <h3>كيف تعمل المشاركة العائلية؟</h3>
+      <p>يمكن للمشترك الأساسي في الباقة العائلية دعوة فرد واحد من العائلة لمشاركته مزايا بريميوم. لتعديل أو تصحيح بريد العضو المضاف، يرجى مراسلة فريقنا على <a href="mailto:sharing@partwk.com">sharing@partwk.com</a>.</p>
+
+      <h3>كيف أقوم بحذف حسابي؟</h3>
+      <p>يمكنك حذف حسابك في أي وقت من داخل التطبيق عبر: <code>الملف الشخصي ← الإعدادات ← حذف الحساب</code>. أو عبر إرسال بريد إلكتروني إلى <a href="mailto:support@partwk.com">support@partwk.com</a> مع ذكر "طلب حذف الحساب".</p>
+
+      <h3>ما هي اللغات المدعومة؟</h3>
+      <p>يقدم بارتوك ملخصات وتسجيلات صوتية احترافية بثلاث لغات: الإنجليزية، الكردية السورانية، والعربية. يمكنك تغيير لغة التطبيق في أي وقت من إعدادات الملف الشخصي.</p>
+
+      <h2>معلومات الشركة</h2>
+      <div class="info-box">
+        <p><strong><a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a></strong><br>
+        المطور والناشر الرسمي لتطبيق بارتوك<br>
+        الموقع الإلكتروني: <a href="https://partwk.com">https://partwk.com</a><br>
+        الدعم: <a href="mailto:support@partwk.com">support@partwk.com</a></p>
       </div>
     </div>
   </main>
 
+  <!-- Site Footer -->
   <footer class="site-footer">
     <div class="footer-inner">
       <div class="footer-nav">
-        <a href="/">Home</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/terms">Terms of Service</a>
-        <a href="/delete-account">Account Deletion</a>
-        <a href="/support">Support</a>
+        <a href="/">
+          <span data-lang="en">Home</span>
+          <span data-lang="ku">سەرەتا</span>
+          <span data-lang="ar">الرئيسية</span>
+        </a>
+        <a href="/privacy">
+          <span data-lang="en">Privacy Policy</span>
+          <span data-lang="ku">سیاسەتی تایبەتمەندی</span>
+          <span data-lang="ar">سياسة الخصوصية</span>
+        </a>
+        <a href="/terms">
+          <span data-lang="en">Terms of Service</span>
+          <span data-lang="ku">مەرجەکانی بەکارهێنان</span>
+          <span data-lang="ar">شروط الخدمة</span>
+        </a>
+        <a href="/support">
+          <span data-lang="en">Support &amp; FAQ</span>
+          <span data-lang="ku">پشتیوانی و یارمەتی</span>
+          <span data-lang="ar">الدعم والمساعدة</span>
+        </a>
+        <a href="/delete-account">
+          <span data-lang="en">Delete Account</span>
+          <span data-lang="ku">سڕینەوەی هەژمار</span>
+          <span data-lang="ar">حذف الحساب</span>
+        </a>
       </div>
+
       <div class="footer-copyright">
-        <span>&copy; <span id="year">2026</span> ZENTORI STUDIOS LTD. All rights reserved.</span>
-        <span>Partwk • پەرتوک</span>
+        <div>
+          &copy; <span id="year">2026</span> Partwk. All rights reserved. Published by <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a>.
+        </div>
+        <div>
+          Contact: <a href="mailto:support@partwk.com">support@partwk.com</a>
+        </div>
       </div>
     </div>
   </footer>
 
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
+  <script src="/assets/main.js"></script>
 </body>
 </html>

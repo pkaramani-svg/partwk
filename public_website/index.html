@@ -1,102 +1,459 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Partwk — Multilingual Book Summaries & Audio</title>
-  <meta name="description" content="Partwk (پەرتوک) delivers curated book summaries and crystal-clear audio narrations in English, Kurdish Sorani, and Arabic.">
+  <script>
+    (function() {
+      var host = window.location.hostname;
+      var allowed = ['partwk.com', 'www.partwk.com', 'localhost', '127.0.0.1'];
+      if (allowed.indexOf(host) === -1) {
+        document.documentElement.innerHTML = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page unavailable</title><style>body{background:#070b14;color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:20px}h1{font-size:24px;margin-bottom:8px;font-weight:600}p{color:#94a3b8;font-size:16px;margin:0}</style></head><body><div><h1>Page unavailable</h1><p>This page is not publicly available.</p></div></body></html>';
+        window.stop && window.stop();
+      }
+    })();
+  </script>
+  <title data-title-en="Partwk — Premium Non-Fiction Book Summaries & Audio" data-title-ku="پەرتوک — پوختەی کتێبە ناوازەکانی جیهان و دەنگ" data-title-ar="بارتوك — ملخصات كتب غير خيالية وتسجيلات صوتية">Partwk — Premium Non-Fiction Book Summaries & Audio</title>
+  <meta name="description" content="Partwk (پەرتوک) delivers curated non-fiction book summaries and crystal-clear audio narrations across English, Kurdish Sorani, and Arabic.">
   <link rel="icon" type="image/png" href="/assets/app_icon.png">
   <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
+
+  <!-- Site Header -->
   <header class="site-header">
     <div class="header-inner">
-      <a href="/" class="brand-link">
-        <img src="/assets/app_icon.png" alt="Partwk Logo" class="brand-logo">
-        <span class="brand-title">Partwk <span class="kurdish-mark">پەرتوک</span></span>
+      <a href="/" class="brand-link" aria-label="Partwk Home">
+        <img src="/assets/logo.png" alt="Partwk Logo" class="brand-logo" width="40" height="40">
+        <span class="brand-title">
+          <span>Partwk</span>
+          <span class="kurdish-mark">پەرتوک</span>
+        </span>
       </a>
-      <nav class="main-nav" aria-label="Main Navigation">
-        <a href="/" class="active">Home</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/terms">Terms</a>
-        <a href="/delete-account">Delete Account</a>
-        <a href="/support">Support</a>
-      </nav>
+
+      <div class="header-right">
+        <nav class="main-nav" aria-label="Main Navigation">
+          <a href="/privacy">
+            <span data-lang="en">Privacy</span>
+            <span data-lang="ku">تایبەتمەندی</span>
+            <span data-lang="ar">الخصوصية</span>
+          </a>
+          <a href="/terms">
+            <span data-lang="en">Terms</span>
+            <span data-lang="ku">مەرجەکان</span>
+            <span data-lang="ar">الشروط</span>
+          </a>
+          <a href="/support">
+            <span data-lang="en">Support</span>
+            <span data-lang="ku">پشتیوانی</span>
+            <span data-lang="ar">الدعم</span>
+          </a>
+          <a href="/delete-account">
+            <span data-lang="en">Account</span>
+            <span data-lang="ku">سڕینەوەی هەژمار</span>
+            <span data-lang="ar">حذف الحساب</span>
+          </a>
+        </nav>
+
+        <!-- Trilingual Switcher -->
+        <div class="lang-switcher" role="group" aria-label="Language selection">
+          <button type="button" class="lang-btn active" data-lang-btn="en" aria-pressed="true">EN</button>
+          <button type="button" class="lang-btn" data-lang-btn="ku" aria-pressed="false">کوردی</button>
+          <button type="button" class="lang-btn" data-lang-btn="ar" aria-pressed="false">العربية</button>
+        </div>
+      </div>
     </div>
   </header>
 
+  <!-- Site Content -->
   <main class="site-content">
+
+    <!-- Hero Section -->
     <section class="hero">
-      <span class="hero-badge">Curated Learning • خوێندنەوە • قراءة</span>
-      <h1>Read & Listen to Key Book Insights in Minutes</h1>
-      <p class="lead">Partwk brings you concise, high-impact book summaries and crystal-clear audio narrations crafted for curious minds across English, Kurdish Sorani, and Arabic.</p>
+      <div class="hero-badge">
+        <span data-lang="en">✦ Curated Insights in 15 Minutes</span>
+        <span data-lang="ku">✦ پوختەی بەپێز لە ١٥ خولەکدا</span>
+        <span data-lang="ar">✦ أفكار منتقاة في ١٥ دقيقة</span>
+      </div>
+
+      <h1 data-lang="en">Read &amp; Listen to Key Book Insights in Minutes</h1>
+      <h1 data-lang="ku" style="display:none;">پوختەی کتێبە گرنگەکان بخوێنەرەوە و گوێ لێبگرە لە چەند خولەکێکدا</h1>
+      <h1 data-lang="ar" style="display:none;">اقرأ واستمع إلى أهم أفكار الكتب في دقائق</h1>
+
+      <p class="lead" data-lang="en">
+        Partwk (پەرتوک) delivers curated non-fiction book summaries and studio-quality audio narrations across English, Kurdish Sorani, and Arabic. Learn faster, grow daily, and access knowledge anywhere.
+      </p>
+      <p class="lead" data-lang="ku" style="display:none;">
+        پەرتوک پوختەی دیارترین کتێبە بەسوودەکانی جیهان و تۆماری دەنگیی بەرز پێشکەش دەکات بە زمانەکانی ئینگلیزی، کوردی سۆرانی، و عەرەبی. بە زیرەکی فێربە، خێراتر پێش بکەوە، و زانست لە هەموو شوێنێک لەگەڵ خۆت ببە.
+      </p>
+      <p class="lead" data-lang="ar" style="display:none;">
+        يقدم بارتوك ملخصات منتقاة لأفضل الكتب العالمية وتسجيلات صوتية احترافية باللغات الإنجليزية، الكردية السورانية، والعربية. تعلم بذكاء، وانمُ أسرع، واحتفظ بالمعرفة أينما كنت.
+      </p>
+
       <div class="hero-actions">
-        <a href="/support" class="btn btn-primary">Contact Support</a>
-        <a href="/privacy" class="btn btn-secondary">Read Privacy Policy</a>
+        <a href="#library" class="btn btn-primary">
+          <span data-lang="en">Explore Library</span>
+          <span data-lang="ku">گەڕان لە کتێبخانە</span>
+          <span data-lang="ar">استكشف المكتبة</span>
+        </a>
+        <a href="/support" class="btn btn-secondary">
+          <span data-lang="en">Support &amp; FAQ</span>
+          <span data-lang="ku">پشتیوانی و پرسیارە باوەکان</span>
+          <span data-lang="ar">الدعم والأسئلة الشائعة</span>
+        </a>
       </div>
     </section>
 
-    <div class="grid-features">
-      <article class="card">
-        <div class="card-icon">📚</div>
-        <h3>Book Summaries & Audio</h3>
-        <p>Distilled core ideas from world-class non-fiction books. Read key insights in 15 minutes or listen to professional audio narrations on the go.</p>
-      </article>
+    <!-- Explore the Library / Books Carousel Showcase -->
+    <section class="showcase-section" id="library">
+      <div class="showcase-header">
+        <div>
+          <h2 data-lang="en">Explore the Library</h2>
+          <h2 data-lang="ku" style="display:none;">گەڕان لە کتێبخانەدا</h2>
+          <h2 data-lang="ar" style="display:none;">استكشف المكتبة</h2>
+          <p data-lang="en">Curated non-fiction titles available in the Partwk catalogue</p>
+          <p data-lang="ku" style="display:none;">پوختەی کتێبە ناوازەکانی بەردەست لە پەرتوک</p>
+          <p data-lang="ar" style="display:none;">عناوين غير خيالية مختارة متوفرة في مكتبة بارتوك</p>
+        </div>
+        <div class="carousel-controls" aria-label="Carousel navigation">
+          <button type="button" class="carousel-btn carousel-prev" aria-label="Previous books">←</button>
+          <button type="button" class="carousel-btn carousel-next" aria-label="Next books">→</button>
+        </div>
+      </div>
 
-      <article class="card">
+      <div class="carousel-container" tabindex="0" aria-label="Book showcase carousel">
+        <div class="carousel-track">
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/12_rules_for_life.webp" alt="12 Rules for Life by Jordan B. Peterson" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">12 Rules for Life</div>
+              <div class="book-card-author">Jordan B. Peterson</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/21_lessons_for_the_21st_century.webp" alt="21 Lessons for the 21st Century by Yuval Noah Harari" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">21 Lessons for the 21st Century</div>
+              <div class="book-card-author">Yuval Noah Harari</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/4000_weeks.webp" alt="4000 Weeks by Oliver Burkeman" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">4000 Weeks</div>
+              <div class="book-card-author">Oliver Burkeman</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/a_random_walk_down_wall_street.webp" alt="A Random Walk Down Wall Street by Burton G. Malkiel" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">A Random Walk Down Wall Street</div>
+              <div class="book-card-author">Burton G. Malkiel</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/a_short_history_of_nearly_everything.webp" alt="A Short History of Nearly Everything by Bill Bryson" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">A Short History of Nearly Everything</div>
+              <div class="book-card-author">Bill Bryson</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/ai_superpowers.webp" alt="AI Superpowers by Kai-Fu Lee" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">AI Superpowers</div>
+              <div class="book-card-author">Kai-Fu Lee</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/atomic_habits.webp" alt="Atomic Habits by James Clear" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Atomic Habits</div>
+              <div class="book-card-author">James Clear</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/awaken_the_giant_within.webp" alt="Awaken the Giant Within by Tony Robbins" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Awaken the Giant Within</div>
+              <div class="book-card-author">Tony Robbins</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/becoming.webp" alt="Becoming by Michelle Obama" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Becoming</div>
+              <div class="book-card-author">Michelle Obama</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/behave.webp" alt="Behave by Robert M. Sapolsky" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Behave</div>
+              <div class="book-card-author">Robert M. Sapolsky</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/blue_ocean_strategy.webp" alt="Blue Ocean Strategy by W. Chan Kim &amp; Renée Mauborgne" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Blue Ocean Strategy</div>
+              <div class="book-card-author">W. Chan Kim &amp; Renée Mauborgne</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/breath.webp" alt="Breath by James Nestor" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Breath</div>
+              <div class="book-card-author">James Nestor</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/built_to_last.webp" alt="Built to Last by Jim Collins" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Built to Last</div>
+              <div class="book-card-author">Jim Collins</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/built_to_sell.webp" alt="Built to Sell by John Warrillow" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Built to Sell</div>
+              <div class="book-card-author">John Warrillow</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/cant_hurt_me.webp" alt="Can't Hurt Me by David Goggins" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Can't Hurt Me</div>
+              <div class="book-card-author">David Goggins</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/common_stocks_and_uncommon_profits.webp" alt="Common Stocks and Uncommon Profits by Philip Fisher" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Common Stocks and Uncommon Profits</div>
+              <div class="book-card-author">Philip Fisher</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/competing_against_luck.webp" alt="Competing Against Luck by Clayton Christensen" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Competing Against Luck</div>
+              <div class="book-card-author">Clayton Christensen</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/crossing_the_chasm.webp" alt="Crossing the Chasm by Geoffrey A. Moore" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Crossing the Chasm</div>
+              <div class="book-card-author">Geoffrey A. Moore</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/crucial_conversations.webp" alt="Crucial Conversations by Kerry Patterson" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Crucial Conversations</div>
+              <div class="book-card-author">Kerry Patterson</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/dare_to_lead.webp" alt="Dare to Lead by Brené Brown" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Dare to Lead</div>
+              <div class="book-card-author">Brené Brown</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/deep_work.webp" alt="Deep Work by Cal Newport" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Deep Work</div>
+              <div class="book-card-author">Cal Newport</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/difficult_conversations.webp" alt="Difficult Conversations by Douglas Stone" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Difficult Conversations</div>
+              <div class="book-card-author">Douglas Stone</div>
+            </div>
+          </div>
+          <div class="book-card" tabindex="0">
+            <div class="book-card-cover-wrap">
+              <img src="/assets/covers/digital_minimalism.webp" alt="Digital Minimalism by Cal Newport" class="book-card-cover" loading="lazy" width="170" height="255">
+            </div>
+            <div class="book-card-meta">
+              <div class="book-card-title">Digital Minimalism</div>
+              <div class="book-card-author">Cal Newport</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Core Features Grid -->
+    <section class="grid-features">
+      <div class="card">
+        <div class="card-icon">⏱️</div>
+        <h3 data-lang="en">15-Minute Summaries &amp; Audio</h3>
+        <h3 data-lang="ku" style="display:none;">پوختەی ١٥ خولەکی و تۆماری دەنگی</h3>
+        <h3 data-lang="ar" style="display:none;">ملخصات في ١٥ دقيقة وتسجيلات صوتية</h3>
+        <p data-lang="en">Distill key takeaways, actionable principles, and memorable quotes from leading non-fiction books in concise reading and listening sessions.</p>
+        <p data-lang="ku" style="display:none;">دەرهێنانی گرنگترین خاڵە سەرەکییەکان، یاساکانی کردار، و وتە بەنرخەکان لە باشترین پەرتووکەکانی جیهاندا بە شێوازێکی کورت و بەسوود.</p>
+        <p data-lang="ar" style="display:none;">استخلص أهم الأفكار والمبادئ القابلة للتطبيق وأبرز الاقتباسات من أشهر الكتب العالمية في جلسات قراءة واستماع موجزة.</p>
+      </div>
+
+      <div class="card">
         <div class="card-icon">🌍</div>
-        <h3>True Trilingual Experience</h3>
-        <p>Built from the ground up for multilingual readers with native support for English, Kurdish Sorani (کوردی سۆرانی), and Arabic (العربية), including authentic RTL typography.</p>
-      </article>
+        <h3 data-lang="en">True Trilingual Experience</h3>
+        <h3 data-lang="ku" style="display:none;">ئەزموونێکی ڕاستەقینەی سێ زمانە</h3>
+        <h3 data-lang="ar" style="display:none;">تجربة ثلاثية اللغات أصلية</h3>
+        <p data-lang="en">Read and listen seamlessly across English, authentic Kurdish Sorani, and Modern Standard Arabic, with dedicated regional RTL support and typography.</p>
+        <p data-lang="ku" style="display:none;">بە زمانی ئینگلیزی، کوردی سۆرانیی ڕەسەن، و عەرەبی بخوێنەرەوە و گوێ لێبگرە، بە شێوازی تایبەت و دیزاینێکی ڕێکی ڕاست بۆ چەپ.</p>
+        <p data-lang="ar" style="display:none;">اقرأ واستمع بسلاسة باللغة الإنجليزية، الكردية السورانية الأصلية، والعربية الفصحى، مع دعم متكامل للخطوط وتخطيط الاتجاه من اليمين إلى اليسار.</p>
+      </div>
 
-      <article class="card">
+      <div class="card">
         <div class="card-icon">🔒</div>
-        <h3>Encrypted Offline Library</h3>
-        <p>Save editions to your device for reading and listening offline. All downloaded editions and decryption keys are securely encrypted and managed locally on your device.</p>
-      </article>
+        <h3 data-lang="en">Encrypted Offline Library</h3>
+        <h3 data-lang="ku" style="display:none;">کتێبخانەی ئۆفلاینی پارێزراو</h3>
+        <h3 data-lang="ar" style="display:none;">مكتبة آمنة دون اتصال</h3>
+        <p data-lang="en">Download summaries and audiobooks for offline study during commutes or flights. Content is locally encrypted and managed securely on your device.</p>
+        <p data-lang="ku" style="display:none;">پوختەکان و پەرتووکە دەنگییەکان دابەزێنە بۆ خوێندنەوە و گوێگرتن بێ ئینتەرنێت لە کاتی گەشتدا. هەموو فایلەکان پارێزراون لەسەر ئامێرەکەت.</p>
+        <p data-lang="ar" style="display:none;">قم بتنزيل الملخصات والكتب الصوتية للاستفادة منها دون الحاجة لشبكة الإنترنت. يتم تشفير المحتوى وحفظه بأمان على جهازك.</p>
+      </div>
 
-      <article class="card">
+      <div class="card">
         <div class="card-icon">👨‍👩‍👧‍👦</div>
-        <h3>Family Sharing</h3>
-        <p>Share your Premium subscription with a designated family member. Our atomic reservation protocol protects your slot with locked recipient safeguards.</p>
-      </article>
+        <h3 data-lang="en">Family Premium Sharing</h3>
+        <h3 data-lang="ku" style="display:none;">هاوبەشکردنی خێزانی بریمیۆم</h3>
+        <h3 data-lang="ar" style="display:none;">المشاركة العائلية بريميوم</h3>
+        <p data-lang="en">Share full Premium access with a designated family member at no extra cost, protected by slot verification and private individual reading accounts.</p>
+        <p data-lang="ku" style="display:none;">دەستڕاگەیشتنی تەواوی پریمیۆم لەگەڵ یەکێک لە ئەندامانی خێزانەکەت بەش بکە بێ هیچ تێچوویەکی زیادە، لەگەڵ هەژماری سەربەخۆ بۆ هەر کەسێک.</p>
+        <p data-lang="ar" style="display:none;">شارك مزايا بريميوم الكاملة مع أحد أفراد عائلتك دون أي تكلفة إضافية، مع الحفاظ على خصوصية حساب القراءة لكل فرد.</p>
+      </div>
 
-      <article class="card">
-        <div class="card-icon">⚡</div>
-        <h3>Seamless Cloud Sync</h3>
-        <p>Powered by Google Firebase Authentication. Your reading streak, bookmarks, playback positions, and preferences stay synchronized automatically.</p>
-      </article>
+      <div class="card">
+        <div class="card-icon">☁️</div>
+        <h3 data-lang="en">Seamless Cloud Sync</h3>
+        <h3 data-lang="ku" style="display:none;">هاوکاتکردنی بەردەوام</h3>
+        <h3 data-lang="ar" style="display:none;">مزامنة سحابية سلسة</h3>
+        <p data-lang="en">Your reading progress, completed summaries, audio playback positions, and learning streaks remain synchronised automatically across all your devices.</p>
+        <p data-lang="ku" style="display:none;">پێشکەوتنی خوێندنەوەت، کتێبە تەواوکراوەکان، خاڵی وەستانی دەنگ، و زنجیرەی ڕۆژانەت بە شێوەیەکی ئۆتۆماتیکی لەسەر هەموو ئامێرەکانت نوێ دەبێتەوە.</p>
+        <p data-lang="ar" style="display:none;">تتم مزامنة تقدم قراءتك، ملخصاتك المكتملة، مواضع الاستماع الصوتي، ومستويات تقدمك اليومية تلقائياً عبر جميع أجهزتك.</p>
+      </div>
 
-      <article class="card">
+      <div class="card">
         <div class="card-icon">🛡️</div>
-        <h3>User Privacy & Control</h3>
-        <p>No third-party ad tracking and no selling of personal data. You retain full control over your profile with one-tap account deletion directly in Settings.</p>
-      </article>
+        <h3 data-lang="en">User Privacy &amp; Data Control</h3>
+        <h3 data-lang="ku" style="display:none;">پاراستنی تەواوی تایبەتمەندی</h3>
+        <h3 data-lang="ar" style="display:none;">خصوصية تامة وتحكم كامل</h3>
+        <p data-lang="en">We believe your data belongs to you. No tracking across third-party apps, no selling of personal data, and instant self-serve account deletion at any time.</p>
+        <p data-lang="ku" style="display:none;">ئێمە باوەڕمان وایە زانیارییەکانت مافی خۆتن. هیچ شوێنپێهەڵگرتنێک لە ئەپەکانی تردا نییە، زانیاری نافڕۆشرێت، و دەتوانیت لە هەر کاتێکدا هەژمارەکەت بسڕیتەوە.</p>
+        <p data-lang="ar" style="display:none;">نحن نؤمن بأن بياناتك ملك لك وحدك. لا تتبع عبر التطبيقات الخارجية، لا بيع للبيانات الشخصية، وتوفر ميزة حذف الحساب بضغطة زر في أي وقت.</p>
+      </div>
+    </section>
+
+    <!-- Publisher & Legal Note -->
+    <div class="info-box">
+      <div data-lang="en">
+        <strong>Partwk</strong> is created, maintained, and operated by <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a>. For questions regarding the app, subscriptions, family sharing, or partnership inquiries, contact us at <a href="mailto:support@partwk.com">support@partwk.com</a>.
+      </div>
+      <div data-lang="ku" style="display:none;">
+        <strong>پەرتوک</strong> بەرهەمهێنراو و بەڕێوەبراوە لەلایەن کۆمپانیای <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a>. بۆ هەر پرسیارێک دەربارەی ئەپڵیکەیشن، بەشداریکردن، یان هاوبەشی خێزانی، پەیوەندیمان پێوە بکەن لە ڕێگەی <a href="mailto:support@partwk.com">support@partwk.com</a>.
+      </div>
+      <div data-lang="ar" style="display:none;">
+        تم تطوير وإدارة تطبيق <strong>بارتوك</strong> بواسطة شركة <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a>. لأي استفسارات حول التطبيق، الاشتراكات، أو المشاركة العائلية، يمكنك التواصل معنا عبر <a href="mailto:support@partwk.com">support@partwk.com</a>.
+      </div>
     </div>
 
-    <section class="info-box">
-      <p><strong>Mobile Application Support:</strong> Partwk is published by <strong>ZENTORI STUDIOS LTD</strong>. For account assistance, subscription inquiries, or Family Sharing corrections, reach our team directly at <a href="mailto:support@partwk.com">support@partwk.com</a> or <a href="mailto:sharing@partwk.com">sharing@partwk.com</a>.</p>
-    </section>
   </main>
 
+  <!-- Site Footer -->
   <footer class="site-footer">
     <div class="footer-inner">
       <div class="footer-nav">
-        <a href="/">Home</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/terms">Terms of Service</a>
-        <a href="/delete-account">Account Deletion</a>
-        <a href="/support">Support</a>
+        <a href="/">
+          <span data-lang="en">Home</span>
+          <span data-lang="ku">سەرەتا</span>
+          <span data-lang="ar">الرئيسية</span>
+        </a>
+        <a href="/privacy">
+          <span data-lang="en">Privacy Policy</span>
+          <span data-lang="ku">سیاسەتی تایبەتمەندی</span>
+          <span data-lang="ar">سياسة الخصوصية</span>
+        </a>
+        <a href="/terms">
+          <span data-lang="en">Terms of Service</span>
+          <span data-lang="ku">مەرجەکانی بەکارهێنان</span>
+          <span data-lang="ar">شروط الخدمة</span>
+        </a>
+        <a href="/support">
+          <span data-lang="en">Support &amp; FAQ</span>
+          <span data-lang="ku">پشتیوانی و یارمەتی</span>
+          <span data-lang="ar">الدعم والمساعدة</span>
+        </a>
+        <a href="/delete-account">
+          <span data-lang="en">Delete Account</span>
+          <span data-lang="ku">سڕینەوەی هەژمار</span>
+          <span data-lang="ar">حذف الحساب</span>
+        </a>
       </div>
+
       <div class="footer-copyright">
-        <span>&copy; <span id="year">2026</span> ZENTORI STUDIOS LTD. All rights reserved.</span>
-        <span>Partwk • پەرتوک</span>
+        <div>
+          &copy; <span id="year">2026</span> Partwk. All rights reserved. Published by <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a>.
+        </div>
+        <div>
+          Contact: <a href="mailto:support@partwk.com">support@partwk.com</a>
+        </div>
       </div>
     </div>
   </footer>
 
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
+  <script src="/assets/main.js"></script>
 </body>
 </html>

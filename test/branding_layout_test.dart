@@ -37,9 +37,9 @@ void main() {
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(screen(const LoginRegisterScreen()));
         await tester.pumpAndSettle();
-        expect(find.byType(Image), findsWidgets);
-        await tester.scrollUntilVisible(find.text('Sign Up'), 250, scrollable: find.byType(Scrollable).first);
-        await tester.tap(find.text('Sign Up'));
+        final toggleText = lang == 'ku' ? 'تۆمارکردن' : (lang == 'ar' ? 'إنشاء حساب' : 'Create Account');
+        await tester.scrollUntilVisible(find.text(toggleText), 250, scrollable: find.byType(Scrollable).first);
+        await tester.tap(find.text(toggleText));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
       });

@@ -8,7 +8,7 @@ const Sidebar = () => {
     <aside className="sidebar glass-panel">
       <div className="sidebar-header">
         <div className="logo-icon">
-          <BookOpen color="white" size={24} />
+          <img src="/email_logo.png" alt="Partwk" style={{ width: 28, height: 28, objectFit: 'contain' }} />
         </div>
         <h2 className="text-gradient">Partwk Admin</h2>
       </div>

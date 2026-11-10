@@ -1,47 +1,98 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Terms of Service — Partwk</title>
+  <script>
+    (function() {
+      var host = window.location.hostname;
+      var allowed = ['partwk.com', 'www.partwk.com', 'localhost', '127.0.0.1'];
+      if (allowed.indexOf(host) === -1) {
+        document.documentElement.innerHTML = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page unavailable</title><style>body{background:#070b14;color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:20px}h1{font-size:24px;margin-bottom:8px;font-weight:600}p{color:#94a3b8;font-size:16px;margin:0}</style></head><body><div><h1>Page unavailable</h1><p>This page is not publicly available.</p></div></body></html>';
+        window.stop && window.stop();
+      }
+    })();
+  </script>
+  <title data-title-en="Terms of Service — Partwk" data-title-ku="مەرجەکانی بەکارهێنان — پەرتوک" data-title-ar="شروط الخدمة — بارتوك">Terms of Service — Partwk</title>
   <meta name="description" content="Terms of Service for Partwk, operated by ZENTORI STUDIOS LTD. Rules, intellectual property, session management, and subscriptions.">
   <link rel="icon" type="image/png" href="/assets/app_icon.png">
   <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
+
+  <!-- Site Header -->
   <header class="site-header">
     <div class="header-inner">
-      <a href="/" class="brand-link">
-        <img src="/assets/app_icon.png" alt="Partwk Logo" class="brand-logo">
-        <span class="brand-title">Partwk <span class="kurdish-mark">پەرتوک</span></span>
+      <a href="/" class="brand-link" aria-label="Partwk Home">
+        <img src="/assets/logo.png" alt="Partwk Logo" class="brand-logo" width="40" height="40">
+        <span class="brand-title">
+          <span>Partwk</span>
+          <span class="kurdish-mark">پەرتوک</span>
+        </span>
       </a>
-      <nav class="main-nav" aria-label="Main Navigation">
-        <a href="/">Home</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/terms" class="active">Terms</a>
-        <a href="/delete-account">Delete Account</a>
-        <a href="/support">Support</a>
-      </nav>
+
+      <div class="header-right">
+        <nav class="main-nav" aria-label="Main Navigation">
+          <a href="/">
+            <span data-lang="en">Home</span>
+            <span data-lang="ku">سەرەتا</span>
+            <span data-lang="ar">الرئيسية</span>
+          </a>
+          <a href="/privacy">
+            <span data-lang="en">Privacy</span>
+            <span data-lang="ku">تایبەتمەندی</span>
+            <span data-lang="ar">الخصوصية</span>
+          </a>
+          <a href="/terms" class="active">
+            <span data-lang="en">Terms</span>
+            <span data-lang="ku">مەرجەکان</span>
+            <span data-lang="ar">الشروط</span>
+          </a>
+          <a href="/support">
+            <span data-lang="en">Support</span>
+            <span data-lang="ku">پشتیوانی</span>
+            <span data-lang="ar">الدعم</span>
+          </a>
+          <a href="/delete-account">
+            <span data-lang="en">Account</span>
+            <span data-lang="ku">سڕینەوەی هەژمار</span>
+            <span data-lang="ar">حذف الحساب</span>
+          </a>
+        </nav>
+
+        <div class="lang-switcher" role="group" aria-label="Language selection">
+          <button type="button" class="lang-btn active" data-lang-btn="en" aria-pressed="true">EN</button>
+          <button type="button" class="lang-btn" data-lang-btn="ku" aria-pressed="false">کوردی</button>
+          <button type="button" class="lang-btn" data-lang-btn="ar" aria-pressed="false">العربية</button>
+        </div>
+      </div>
     </div>
   </header>
 
+  <!-- Site Content -->
   <main class="site-content">
     <article class="doc-header">
-      <h1>Terms of Service</h1>
-      <p class="doc-meta">Effective Date: November 10, 2026 • Published by ZENTORI STUDIOS LTD</p>
+      <h1 data-lang="en">Terms of Service</h1>
+      <h1 data-lang="ku" style="display:none;">مەرجەکانی بەکارهێنان</h1>
+      <h1 data-lang="ar" style="display:none;">شروط الخدمة</h1>
+
+      <p class="doc-meta" data-lang="en">Effective Date: November 10, 2026 • Published by <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a></p>
+      <p class="doc-meta" data-lang="ku" style="display:none;">ڕێکەوتی کاراکردن: ١٠ی تشرینی دووەمی ٢٠٢٦ • بڵاوکراوەتەوە لەلایەن <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a></p>
+      <p class="doc-meta" data-lang="ar" style="display:none;">تاريخ السريان: ١٠ نوفمبر ٢٠٢٦ • صادر عن <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a></p>
     </article>
 
-    <div class="doc-body">
-      <p>Please read these Terms of Service ("Terms") carefully before using the Partwk mobile application and related services (the "Service") operated by <strong>ZENTORI STUDIOS LTD</strong> ("we", "us", or "our").</p>
+    <!-- ENGLISH CONTENT -->
+    <div class="doc-body" data-lang="en">
+      <p>Please read these Terms of Service ("Terms") carefully before using the Partwk mobile application and related services (the "Service") operated by <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> ("we", "us", or "our").</p>
 
       <h2>1. Acceptance of Terms</h2>
       <p>By creating an account, downloading, or accessing Partwk, you agree to be bound by these Terms. If you disagree with any part of these Terms, you may not access or use the Service.</p>
 
       <h2>2. Intellectual Property Rights</h2>
-      <p>All book summaries, audio narrations, key ideas, editorial translations in English, Kurdish Sorani (کوردی سۆرانی), and Arabic (العربية), graphics, logos, user interfaces, and software code provided within Partwk are the exclusive intellectual property of <strong>ZENTORI STUDIOS LTD</strong> and are protected under international copyright, trademark, and intellectual property laws.</p>
+      <p>All book summaries, audio narrations, key ideas, editorial translations in English, Kurdish Sorani (کوردی سۆرانی), and Arabic (العربية), graphics, logos, user interfaces, and software code provided within Partwk are the exclusive intellectual property of <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> and are protected under international copyright, trademark, and intellectual property laws.</p>
       <p>We grant you a personal, non-exclusive, non-transferable, revocable license to access, read, and listen to the content for personal, non-commercial purposes. Copying, redistributing, broadcasting, scraping, republishing, or commercially exploiting our summaries or audio recordings without prior written permission is strictly prohibited.</p>
 
-      <h2>3. Account Security & Single Concurrent Session Rule</h2>
+      <h2>3. Account Security &amp; Single Concurrent Session Rule</h2>
       <p>You are responsible for safeguarding your login credentials. To protect content and maintain fair service access:</p>
       <ul>
         <li>Accounts are intended for individual use only. Account sharing or credential distribution is not permitted.</li>
@@ -65,45 +116,155 @@
         <li>If your subscription expires or is revoked, local offline licences are invalidated automatically upon network reconnection.</li>
       </ul>
 
-      <h2>6. Account Termination & Deletion</h2>
+      <h2>6. Account Termination &amp; Deletion</h2>
       <p>You may terminate your account at any time:</p>
       <ul>
         <li><strong>In-App:</strong> Go to <code>Profile → Settings → Delete account</code> to instantly delete your credentials, profile, and learning progress.</li>
         <li><strong>Support:</strong> You can also email <a href="mailto:support@partwk.com">support@partwk.com</a> to request account deletion if you cannot access your device.</li>
       </ul>
 
-      <h2>7. Disclaimers & Limitation of Liability</h2>
+      <h2>7. Disclaimers &amp; Limitation of Liability</h2>
       <p>Partwk summaries provide educational insights and distillations of non-fiction works for learning purposes. Summaries are independent interpretations and do not replace the full original books. The Service is provided on an "AS IS" and "AS AVAILABLE" basis without warranties of any kind.</p>
 
-      <h2>8. Governing Law & Contact</h2>
+      <h2>8. Governing Law &amp; Contact</h2>
       <p>These Terms shall be governed by and construed in accordance with applicable laws. If you have any questions regarding these Terms, contact us:</p>
       <div class="info-box">
-        <p><strong>ZENTORI STUDIOS LTD</strong><br>
+        <p><strong><a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a></strong><br>
         Email: <a href="mailto:support@partwk.com">support@partwk.com</a><br>
         Family Sharing Support: <a href="mailto:sharing@partwk.com">sharing@partwk.com</a><br>
         Website: <a href="https://partwk.com">https://partwk.com</a></p>
       </div>
     </div>
+
+    <!-- KURDISH SORANI CONTENT -->
+    <div class="doc-body" data-lang="ku" style="display:none;">
+      <p>تکایە پێش بەکارهێنانی ئەپڵیکەیشنی پەرتوک و خزمەتگوزارییە پەیوەندیدارەکان، ئەم مەرجانە بخوێنەرەوە، کە بەڕێوەدەبرێت لەلایەن <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> ("ئێمە").</p>
+
+      <h2>١. قبوڵکردنی مەرجەکان</h2>
+      <p>بە دروستکردنی هەژمار، دابەزاندن، یان چوونەژوورەوە بۆ پەرتوک، تۆ ڕازی دەبیت بە پابەندبوون بەم مەرجانە. ئەگەر بە هەر بەشێکی مەرجەکان ڕازی نیت، بۆت نییە خزمەتگوزارییەکە بەکاربهێنیت.</p>
+
+      <h2>٢. مافی خاوەندارێتی فکری</h2>
+      <p>هەموو پوختەکان، تۆمارە دەنگییەکان، ئایدیا سەرەکییەکان، وەرگێڕانەکان بە زمانەکانی ئینگلیزی، کوردی سۆرانی، و عەرەبی، لۆگۆ، و کۆدی پرۆگرام لە پەرتوکدا، مافی تایبەتی کۆمپانیای <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a>ن و بە یاسا نێودەوڵەتییەکان پارێزراون.</p>
+      <p>بەکارهێنەر تەنها مۆڵەتی بەکارهێنانی کەسی و ناتازرگانی پێدەدرێت بۆ خوێندنەوە و گوێگرتن. لەبەرگرتنەوە، بڵاوکردنەوە، یان بەکارهێنانی بۆ مەبەستی بازرگانی بەبێ مۆڵەتی فەرمی بە تەواوی قەدەغەیە.</p>
+
+      <h2>٣. ئاسایشی هەژمار و یەک دانیشتنی کارا</h2>
+      <p>پاراستنی نهێنی و ووشەی تێپەڕی هەژمارەکەت لە ئەستۆی خۆتدایە:</p>
+      <ul>
+        <li>هەژمارەکان تایبەتن بە بەکارهێنانی یەک کەس. بەشکردنی وشەی نهێنی ڕێگەپێنەدراوە.</li>
+        <li><strong>یەک دانیشتنی کارا:</strong> ئەپڵیکەیشنەکە سیستەمی یەک دانیشتنی هاوکات پەیڕەو دەکات. لە کاتی چوونەژوورەوە لە ئامێرێکی تردا، هەژمارەکەت لە ئامێرە کۆنەکە دەردەچێت.</li>
+      </ul>
+
+      <h2>٤. پلانی بەشداری خێزانی</h2>
+      <p>بەشداری خێزانی ڕێگە بە بەشداربووی سەرەکی دەدات یەک ئەندامی خێزانەکەی زیاد بکات:</p>
+      <ul>
+        <li>ئەندامە بانگهێشتکراوەکە دەبێت خاوەنی هەژمارێکی سەربەخۆ بێت لە پەرتوک.</li>
+        <li>دوای ناردنی بانگهێشت، شوێنی ئەو ئەندامە دەپارێزرێت بۆ ڕێگریکردن لە گۆڕانکاری هەڵە.</li>
+        <li>بۆ هەر گۆڕانکاری یان کێشەیەک دەتوانن پەیوەندی بکەن بە <a href="mailto:sharing@partwk.com">sharing@partwk.com</a>.</li>
+      </ul>
+
+      <h2>٥. داگرتنی ئۆفلاینی پارێزراو</h2>
+      <p>بەشداربووان دەتوانن کتێبەکان دابەزێنن بۆ خوێندنەوەی ئۆفلاین:</p>
+      <ul>
+        <li>فایلەکان بە شێوازی پارێزراو و شفرەکراو لەناو ئەپی پەرتوکدا دەمێننەوە.</li>
+        <li>هەوڵدان بۆ دەرهێنان یان بڵاوکردنەوەی فایلەکان قەدەغەیە و دەبێتە هۆی ڕاگرتنی هەژمارەکەت.</li>
+      </ul>
+
+      <h2>٦. پەیوەندی</h2>
+      <p>بۆ هەر پرسیارێک دەربارەی ئەم مەرجانە، پەیوەندیمان پێوە بکەن:</p>
+      <div class="info-box">
+        <p><strong><a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a></strong><br>
+        ئیمەیڵ: <a href="mailto:support@partwk.com">support@partwk.com</a><br>
+        هاوبەشکردنی خێزانی: <a href="mailto:sharing@partwk.com">sharing@partwk.com</a><br>
+        ماڵپەڕ: <a href="https://partwk.com">https://partwk.com</a></p>
+      </div>
+    </div>
+
+    <!-- ARABIC CONTENT -->
+    <div class="doc-body" data-lang="ar" style="display:none;">
+      <p>يرجى قراءة شروط الخدمة هذه ("الشروط") بعناية قبل استخدام تطبيق بارتوك والخدمات المرتبطة به، والتي تديرها شركة <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> ("نحن").</p>
+
+      <h2>١. الموافقة على الشروط</h2>
+      <p>بمجرد إنشاء حساب، تنزيل، أو استخدام تطبيق بارتوك، فإنك توافق على الالتزام بهذه الشروط. إذا كنت لا توافق على أي جزء منها، فلا يحق لك استخدام الخدمة.</p>
+
+      <h2>٢. حقوق الملكية الفكرية</h2>
+      <p>جميع ملخصات الكتب، التسجيلات الصوتية، الأفكار الرئيسية، الترجمات باللغات الإنجليزية، الكردية السورانية، والعربية، الشعارات والرموز البرمجية في بارتوك هي ملكية فكرية حصرية لشركة <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> ومحمية بموجب قوانين الملكية الفكرية وحقوق النشر الدولية.</p>
+      <p>نمنحك ترخيصاً شخصياً وغير حصري وقابلاً للإلغاء للاستماع والقراءة للاستخدام الشخصي غير التجاري فقط. يمنع منعاً باتاً نسخ، إعادة نشر، توزيع، أو استغلال أي جزء من المحتوى تجارياً دون إذن خطي مسبق.</p>
+
+      <h2>٣. أمان الحساب وقاعدة الجلسة الواحدة النشطة</h2>
+      <p>أنت مسؤول عن الحفاظ على سرية معلومات حسابك:</p>
+      <ul>
+        <li>الحسابات مخصصة للاستخدام الفردي فقط، ويمنع مشاركة بيانات الدخول مع الآخرين.</li>
+        <li><strong>جلسة نشطة واحدة:</strong> يطبق التطبيق قاعدة الجلسة الواحدة، مما يعني أن تسجيل الدخول من جهاز جديد سيؤدي تلقائياً إلى إنهاء الجلسة على جهازك السابق.</li>
+      </ul>
+
+      <h2>٤. اشتراكات المشاركة العائلية</h2>
+      <p>تتيح باقة المشاركة العائلية للمشترك الأساسي مشاركة مزايا بريميوم مع فرد واحد من العائلة:</p>
+      <ul>
+        <li>يجب أن يمتلك العضو المدعو حساباً مجانياً ومستقلاً في تطبيق بارتوك.</li>
+        <li>بمجرد إرسال الدعوة، يتم تأمين وحجز فتحة العضو لمنع أي تبديل غير مقصود.</li>
+        <li>لأي تعديلات إدارية، يمكن التواصل مع <a href="mailto:sharing@partwk.com">sharing@partwk.com</a>.</li>
+      </ul>
+
+      <h2>٥. التنزيل المشفر دون اتصال</h2>
+      <p>يتيح بارتوك تنزيل الملخصات للاستماع والقراءة في وضع عدم الاتصال:</p>
+      <ul>
+        <li>تبقى الملفات المحملة مشفرة داخل التطبيق الرسمي لبارتوك.</li>
+        <li>تعد أي محاولة لفك التشفير أو استخراج الملفات انتهاكاً للشروط يؤدي لإلغاء الحساب.</li>
+      </ul>
+
+      <h2>٦. التواصل معنا</h2>
+      <p>إذا كانت لديك أي استفسارات حول شروط الخدمة، يسعدنا تواصلك معنا:</p>
+      <div class="info-box">
+        <p><strong><a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a></strong><br>
+        البريد الإلكتروني: <a href="mailto:support@partwk.com">support@partwk.com</a><br>
+        دعم المشاركة العائلية: <a href="mailto:sharing@partwk.com">sharing@partwk.com</a><br>
+        الموقع الإلكتروني: <a href="https://partwk.com">https://partwk.com</a></p>
+      </div>
+    </div>
   </main>
 
+  <!-- Site Footer -->
   <footer class="site-footer">
     <div class="footer-inner">
       <div class="footer-nav">
-        <a href="/">Home</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/terms">Terms of Service</a>
-        <a href="/delete-account">Account Deletion</a>
-        <a href="/support">Support</a>
+        <a href="/">
+          <span data-lang="en">Home</span>
+          <span data-lang="ku">سەرەتا</span>
+          <span data-lang="ar">الرئيسية</span>
+        </a>
+        <a href="/privacy">
+          <span data-lang="en">Privacy Policy</span>
+          <span data-lang="ku">سیاسەتی تایبەتمەندی</span>
+          <span data-lang="ar">سياسة الخصوصية</span>
+        </a>
+        <a href="/terms">
+          <span data-lang="en">Terms of Service</span>
+          <span data-lang="ku">مەرجەکانی بەکارهێنان</span>
+          <span data-lang="ar">شروط الخدمة</span>
+        </a>
+        <a href="/support">
+          <span data-lang="en">Support &amp; FAQ</span>
+          <span data-lang="ku">پشتیوانی و یارمەتی</span>
+          <span data-lang="ar">الدعم والمساعدة</span>
+        </a>
+        <a href="/delete-account">
+          <span data-lang="en">Delete Account</span>
+          <span data-lang="ku">سڕینەوەی هەژمار</span>
+          <span data-lang="ar">حذف الحساب</span>
+        </a>
       </div>
+
       <div class="footer-copyright">
-        <span>&copy; <span id="year">2026</span> ZENTORI STUDIOS LTD. All rights reserved.</span>
-        <span>Partwk • پەرتوک</span>
+        <div>
+          &copy; <span id="year">2026</span> Partwk. All rights reserved. Published by <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a>.
+        </div>
+        <div>
+          Contact: <a href="mailto:support@partwk.com">support@partwk.com</a>
+        </div>
       </div>
     </div>
   </footer>
 
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
+  <script src="/assets/main.js"></script>
 </body>
 </html>

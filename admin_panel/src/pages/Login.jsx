@@ -154,7 +154,7 @@ const Login = () => {
       <div className="login-card">
         <div className="login-header">
           <div className="login-logo-circle">
-            <ShieldCheck color="white" size={32} />
+            <img src="/email_logo.png" alt="Partwk" style={{ width: 42, height: 42, objectFit: 'contain' }} />
           </div>
           <h1>Partwk Admin Portal</h1>
           <p>{step === 1 ? "Step 1: Admin Password Authentication" : "Step 2: Google Authenticator 2FA"}</p>

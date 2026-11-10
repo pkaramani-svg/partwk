@@ -1,37 +1,88 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Account Deletion — Partwk</title>
+  <script>
+    (function() {
+      var host = window.location.hostname;
+      var allowed = ['partwk.com', 'www.partwk.com', 'localhost', '127.0.0.1'];
+      if (allowed.indexOf(host) === -1) {
+        document.documentElement.innerHTML = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page unavailable</title><style>body{background:#070b14;color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:20px}h1{font-size:24px;margin-bottom:8px;font-weight:600}p{color:#94a3b8;font-size:16px;margin:0}</style></head><body><div><h1>Page unavailable</h1><p>This page is not publicly available.</p></div></body></html>';
+        window.stop && window.stop();
+      }
+    })();
+  </script>
+  <title data-title-en="Account Deletion — Partwk" data-title-ku="سڕینەوەی هەژمار — پەرتوک" data-title-ar="حذف الحساب — بارتوك">Account Deletion — Partwk</title>
   <meta name="description" content="How to delete your Partwk account and associated learning data. Step-by-step instructions for in-app deletion and manual support requests.">
   <link rel="icon" type="image/png" href="/assets/app_icon.png">
   <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
+
+  <!-- Site Header -->
   <header class="site-header">
     <div class="header-inner">
-      <a href="/" class="brand-link">
-        <img src="/assets/app_icon.png" alt="Partwk Logo" class="brand-logo">
-        <span class="brand-title">Partwk <span class="kurdish-mark">پەرتوک</span></span>
+      <a href="/" class="brand-link" aria-label="Partwk Home">
+        <img src="/assets/logo.png" alt="Partwk Logo" class="brand-logo" width="40" height="40">
+        <span class="brand-title">
+          <span>Partwk</span>
+          <span class="kurdish-mark">پەرتوک</span>
+        </span>
       </a>
-      <nav class="main-nav" aria-label="Main Navigation">
-        <a href="/">Home</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/terms">Terms</a>
-        <a href="/delete-account" class="active">Delete Account</a>
-        <a href="/support">Support</a>
-      </nav>
+
+      <div class="header-right">
+        <nav class="main-nav" aria-label="Main Navigation">
+          <a href="/">
+            <span data-lang="en">Home</span>
+            <span data-lang="ku">سەرەتا</span>
+            <span data-lang="ar">الرئيسية</span>
+          </a>
+          <a href="/privacy">
+            <span data-lang="en">Privacy</span>
+            <span data-lang="ku">تایبەتمەندی</span>
+            <span data-lang="ar">الخصوصية</span>
+          </a>
+          <a href="/terms">
+            <span data-lang="en">Terms</span>
+            <span data-lang="ku">مەرجەکان</span>
+            <span data-lang="ar">الشروط</span>
+          </a>
+          <a href="/support">
+            <span data-lang="en">Support</span>
+            <span data-lang="ku">پشتیوانی</span>
+            <span data-lang="ar">الدعم</span>
+          </a>
+          <a href="/delete-account" class="active">
+            <span data-lang="en">Account</span>
+            <span data-lang="ku">سڕینەوەی هەژمار</span>
+            <span data-lang="ar">حذف الحساب</span>
+          </a>
+        </nav>
+
+        <div class="lang-switcher" role="group" aria-label="Language selection">
+          <button type="button" class="lang-btn active" data-lang-btn="en" aria-pressed="true">EN</button>
+          <button type="button" class="lang-btn" data-lang-btn="ku" aria-pressed="false">کوردی</button>
+          <button type="button" class="lang-btn" data-lang-btn="ar" aria-pressed="false">العربية</button>
+        </div>
+      </div>
     </div>
   </header>
 
+  <!-- Site Content -->
   <main class="site-content">
     <article class="doc-header">
-      <h1>Account & Data Deletion</h1>
-      <p class="doc-meta">Published by ZENTORI STUDIOS LTD • Updated November 2026</p>
+      <h1 data-lang="en">Account &amp; Data Deletion</h1>
+      <h1 data-lang="ku" style="display:none;">سڕینەوەی هەژمار و زانیارییەکان</h1>
+      <h1 data-lang="ar" style="display:none;">حذف الحساب والبيانات</h1>
+
+      <p class="doc-meta" data-lang="en">Published by <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> • Updated November 2026</p>
+      <p class="doc-meta" data-lang="ku" style="display:none;">بڵاوکراوەتەوە لەلایەن <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> • نوێکراوەتەوە لە تشرینی دووەمی ٢٠٢٦</p>
+      <p class="doc-meta" data-lang="ar" style="display:none;">صادر عن <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a> • محدث في نوفمبر ٢٠٢٦</p>
     </article>
 
-    <div class="doc-body">
+    <!-- ENGLISH CONTENT -->
+    <div class="doc-body" data-lang="en">
       <p>At Partwk, we believe in giving you complete control over your personal information and account data. You can delete your account and all associated cloud learning records at any time, with no questions asked.</p>
 
       <h2>Option 1: Delete Your Account In-App (Instant)</h2>
@@ -45,7 +96,7 @@
           <strong>Go to Settings:</strong> Tap on the <strong>Profile</strong> tab in the bottom navigation bar, then select <strong>Settings</strong> (or the gear icon).
         </li>
         <li>
-          <strong>Select Delete Account:</strong> Scroll down to the Danger Zone section and tap <strong>Delete account</strong> (ڕەشکردنەوەی هەژمارە / حذف الحساب).
+          <strong>Select Delete Account:</strong> Scroll down to the Danger Zone section and tap <strong>Delete account</strong>.
         </li>
         <li>
           <strong>Confirm Deletion:</strong> Review the confirmation prompt and confirm. Your account, authentication credentials, and cloud records will be permanently erased immediately.
@@ -68,7 +119,7 @@
       <h2>What Data Is Deleted?</h2>
       <p>When your account is deleted through either method, the following information is permanently erased:</p>
       <ul>
-        <li>Your Firebase Authentication user identity, email, and password credentials.</li>
+        <li>Your user identity, email, login credentials, and authentication records.</li>
         <li>Your user profile, display name, and avatar selection.</li>
         <li>Your entire reading history, book progress, and audio listening playback positions.</li>
         <li>Your daily study streaks, saved bookmarks, and personal highlights.</li>
@@ -79,26 +130,144 @@
       <h2>Family Sharing Questions</h2>
       <p>If you need assistance correcting a family member email or managing a locked Family Sharing slot without deleting your account, contact our Family Sharing support directly at <a href="mailto:sharing@partwk.com">sharing@partwk.com</a>.</p>
     </div>
+
+    <!-- KURDISH SORANI CONTENT -->
+    <div class="doc-body" data-lang="ku" style="display:none;">
+      <p>لە پەرتوک، ئێمە باوەڕمان بە پێدانی کۆنترۆڵی تەواو هەیە بە تۆ بەسەر هەموو زانیارییە کەسییەکانتدا. تۆ دەتوانیت لە هەر کاتێکدا هەژمارەکەت و هەموو تۆمارەکانت بسڕیتەوە بەبێ هیچ پرسیارێک.</p>
+
+      <h2>ڕێگەی یەکەم: سڕینەوە لەناو ئەپڵیکەیشن (دەستبەجێ)</h2>
+      <p>خێراترین و ڕاستەوخۆترین ڕێگە بۆ سڕینەوەی هەژمارەکەت، لەناو ئەپی پەرتوک خۆیەتی:</p>
+
+      <ol class="steps-list">
+        <li>
+          <strong>کردنەوەی ئەپ:</strong> ئەپڵیکەیشنی پەرتوک بکەرەوە لەسەر ئامێرەکەت.
+        </li>
+        <li>
+          <strong>چوون بۆ ڕێکخستنەکان:</strong> لە بەشی خوارەوە کلیک لەسەر <strong>پرۆفایل</strong> بکە، پاشان <strong>ڕێکخستنەکان</strong> (یان نیشانەی گێڕ).
+        </li>
+        <li>
+          <strong>هەڵبژاردنی سڕینەوەی هەژمار:</strong> بڕۆ خوارەوە بۆ بەشی هۆشداری و کلیک لەسەر <strong>سڕینەوەی هەژمار</strong> بکە.
+        </li>
+        <li>
+          <strong>پشتڕاستکردنەوە:</strong> پەیامی ئاگادارکردنەوەکە پەسەند بکە. هەژمارەکەت و هەموو داتاکانت دەستبەجێ بە تەواوی دەسڕدرێنەوە.
+        </li>
+      </ol>
+
+      <div class="info-box">
+        <strong>ڕێڕەوی سڕینەوە:</strong> <code>پرۆفایل ← ڕێکخستنەکان ← سڕینەوەی هەژمار</code>
+      </div>
+
+      <h2>ڕێگەی دووەم: داواکاری لە ڕێگەی ئیمەیڵەوە (ئەگەر دەستت بە ئەپ نەگەیشت)</h2>
+      <p>ئەگەر ئەپڵیکەیشنەکەت سڕیبێتەوە یان ئامێرەکەت لەدەستدابێت، دەتوانیت لە ڕێگەی ناردنی ئیمەیڵەوە داواکاری پێشکەش بکەیت:</p>
+      <ul>
+        <li>ئیمەیڵ بنێرە بۆ: <a href="mailto:support@partwk.com">support@partwk.com</a></li>
+        <li>ناونیشانی ئیمەیڵ: <strong>داواکاری سڕینەوەی هەژمار</strong></li>
+        <li>تکایە ئیمەیڵەکە لە هەمان ناونیشانی ئیمەیڵی هەژمارەکەت بنێرە بۆ دڵنیابوونەوە لە خاوەندارێتی هەژمارەکە.</li>
+        <li>تیمەکەمان لە ماوەی کەمتر لە ٣٠ ڕۆژدا هەژمارەکەت و هەموو زانیارییەکان لەسەر سێرڤەرەکانمان بە تەواوی دەسڕێتەوە.</li>
+      </ul>
+
+      <h2>چ زانیارییەک دەسڕدرێتەوە؟</h2>
+      <p>لە کاتی سڕینەوەی هەژمارەکەتدا، ئەم زانیارییانە بۆ هەمیشە دەسڕدرێنەوە:</p>
+      <ul>
+        <li>ناسنامەی هەژمار، ئیمەیڵ، و تۆمارەکانی چوونەژوورەوەت.</li>
+        <li>پرۆفایل، ناوی بەکارهێنەر، و وێنۆچکەکەت.</li>
+        <li>تەواوی مێژووی خوێندنەوە و گوێگرتنت.</li>
+        <li>زنجیرەی ڕۆژانەی خوێندنەوە و نیشانەکراوەکانت.</li>
+        <li>بەستەری بەشداری خێزانی یان مافی خێزانیت.</li>
+        <li>تۆماری ئامێر و مۆڵەتەکانی ئۆفلاین.</li>
+      </ul>
+    </div>
+
+    <!-- ARABIC CONTENT -->
+    <div class="doc-body" data-lang="ar" style="display:none;">
+      <p>في بارتوك، نؤمن بحقك الكامل في التحكم ببياناتك ومعلوماتك الشخصية. يمكنك حذف حسابك وجميع سجلاتك السحابية المرتبطة به في أي وقت وبكل سهولة.</p>
+
+      <h2>الخيار الأول: حذف الحساب من داخل التطبيق (فوري)</h2>
+      <p>أسرع طريقة وأكثرها مباشرة لحذف حسابك هي من داخل تطبيق بارتوك مباشرة:</p>
+
+      <ol class="steps-list">
+        <li>
+          <strong>فتح التطبيق:</strong> افتح تطبيق بارتوك على هاتفك المحمول.
+        </li>
+        <li>
+          <strong>الانتقال إلى الإعدادات:</strong> اضغط على تبويب <strong>الملف الشخصي</strong> في الأسفل، ثم اختر <strong>الإعدادات</strong> (رمز الترس).
+        </li>
+        <li>
+          <strong>اختيار حذف الحساب:</strong> مرر للأسفل إلى قسم منطقة الخطر واضغط على <strong>حذف الحساب</strong>.
+        </li>
+        <li>
+          <strong>تأكيد الحذف:</strong> راجع رسالة التأكيد وقم بالموافقة. سيتم حذف حسابك وبيانات تسجيل الدخول وسجلاتك فوراً.
+        </li>
+      </ol>
+
+      <div class="info-box">
+        <strong>مسار الحذف داخل التطبيق:</strong> <code>الملف الشخصي ← الإعدادات ← حذف الحساب</code>
+      </div>
+
+      <h2>الخيار الثاني: طلب الحذف عبر البريد (في حال تعذر الوصول للتطبيق)</h2>
+      <p>إذا قمت بإلغاء تثبيت التطبيق، أو فقدت جهازك، يمكنك طلب الحذف عبر مراسلة فريق الدعم:</p>
+      <ul>
+        <li>أرسل بريداً إلكترونياً إلى: <a href="mailto:support@partwk.com">support@partwk.com</a></li>
+        <li>عنوان الرسالة: <strong>طلب حذف الحساب</strong></li>
+        <li>يرجى إرسال الرسالة من نفس البريد الإلكتروني المسجل في حسابك للتحقق من ملكيتك للحساب.</li>
+        <li>سيقوم فريقنا بالتحقق من هويتك وحذف حسابك وبياناتك بالكامل من خوادمنا خلال مدة أقصاها ٣٠ يوماً.</li>
+      </ul>
+
+      <h2>ما هي البيانات التي يتم حذفها؟</h2>
+      <p>عند حذف حسابك بأي من الطريقتين، يتم مسح البيانات التالية نهائياً:</p>
+      <ul>
+        <li>بيانات الحساب الشخصي، البريد الإلكتروني، وبيانات تسجيل الدخول.</li>
+        <li>الملف الشخصي، اسم العرض، والصورة الرمزية.</li>
+        <li>سجل القراءة بالكامل، تقدم الكتب، ومواضع الاستماع الصوتي.</li>
+        <li>أيام القراءة المتتالية والإشارات المرجعية المحفوظة.</li>
+        <li>عضوية المشاركة العائلية أو حجز الفتحة المرتبطة بك.</li>
+        <li>جلسات الأجهزة النشطة ورخص المحتوى غير المتصل.</li>
+      </ul>
+    </div>
   </main>
 
+  <!-- Site Footer -->
   <footer class="site-footer">
     <div class="footer-inner">
       <div class="footer-nav">
-        <a href="/">Home</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/terms">Terms of Service</a>
-        <a href="/delete-account">Account Deletion</a>
-        <a href="/support">Support</a>
+        <a href="/">
+          <span data-lang="en">Home</span>
+          <span data-lang="ku">سەرەتا</span>
+          <span data-lang="ar">الرئيسية</span>
+        </a>
+        <a href="/privacy">
+          <span data-lang="en">Privacy Policy</span>
+          <span data-lang="ku">سیاسەتی تایبەتمەندی</span>
+          <span data-lang="ar">سياسة الخصوصية</span>
+        </a>
+        <a href="/terms">
+          <span data-lang="en">Terms of Service</span>
+          <span data-lang="ku">مەرجەکانی بەکارهێنان</span>
+          <span data-lang="ar">شروط الخدمة</span>
+        </a>
+        <a href="/support">
+          <span data-lang="en">Support &amp; FAQ</span>
+          <span data-lang="ku">پشتیوانی و یارمەتی</span>
+          <span data-lang="ar">الدعم والمساعدة</span>
+        </a>
+        <a href="/delete-account">
+          <span data-lang="en">Delete Account</span>
+          <span data-lang="ku">سڕینەوەی هەژمار</span>
+          <span data-lang="ar">حذف الحساب</span>
+        </a>
       </div>
+
       <div class="footer-copyright">
-        <span>&copy; <span id="year">2026</span> ZENTORI STUDIOS LTD. All rights reserved.</span>
-        <span>Partwk • پەرتوک</span>
+        <div>
+          &copy; <span id="year">2026</span> Partwk. All rights reserved. Published by <a href="https://zentoristudios.com" target="_blank" rel="noopener noreferrer">ZENTORI STUDIOS LTD</a>.
+        </div>
+        <div>
+          Contact: <a href="mailto:support@partwk.com">support@partwk.com</a>
+        </div>
       </div>
     </div>
   </footer>
 
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
+  <script src="/assets/main.js"></script>
 </body>
 </html>

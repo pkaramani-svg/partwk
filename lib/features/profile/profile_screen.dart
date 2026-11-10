@@ -105,6 +105,24 @@ class ProfileScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    margin: const EdgeInsetsDirectional.only(end: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF7B00).withOpacity(0.12),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFFF7B00).withOpacity(0.25),
+                        width: 1.5,
+                      ),
+                    ),
+                    padding: const EdgeInsets.all(6),
+                    child: Image.asset(
+                      'assets/images/partwk_emblem.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
