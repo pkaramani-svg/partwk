@@ -74,6 +74,7 @@ const UsersManagement = () => {
   const [correctEmailValue, setCorrectEmailValue] = useState('');
   const [correctEmailReason, setCorrectEmailReason] = useState('');
   const [isCorrectingEmail, setIsCorrectingEmail] = useState(false);
+  const [supportFeedback, setSupportFeedback] = useState(null);
   
   // Form State for Add User
   const [addUserForm, setAddUserForm] = useState({ name: '', email: '', password: '', role: 'user', subscriptionStatus: 'free' });
@@ -190,8 +191,8 @@ const UsersManagement = () => {
       }
       if (hasInvite) {
         return {
-          statusText: 'Family Invitation Pending',
-          badgeClass: 'warning',
+          statusText: 'Premium — Family Owner',
+          badgeClass: 'premium',
           entitlement: ent,
           family: fam,
           membership: null,
@@ -250,6 +251,7 @@ const UsersManagement = () => {
     setShowCorrectEmailForm(false);
     setCorrectEmailValue('');
     setCorrectEmailReason('');
+    setSupportFeedback(null);
     setEditForm({
       phone: user.phone || '',
       address: user.address || '',
@@ -707,8 +709,22 @@ const UsersManagement = () => {
                           <div><strong>Assigned Family Member:</strong> {info.memberEmail || 'None assigned yet'}</div>
                           <div><strong>Slot Status:</strong> {info.memberState === 'active' ? 'Active Member' : info.memberState === 'pending' ? 'Invitation Pending' : info.memberState === 'vacated' ? 'Vacated (Locked Slot)' : 'Empty Slot'}</div>
                           
-                          {/* Admin support correction button */}
+                          {/* Admin support correction button & feedback */}
                           <div style={{ marginTop: '10px' }}>
+                            {supportFeedback && (
+                              <div style={{
+                                padding: '8px 12px',
+                                borderRadius: '6px',
+                                marginBottom: '10px',
+                                fontSize: '12px',
+                                background: supportFeedback.type === 'error' ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
+                                color: supportFeedback.type === 'error' ? '#FCA5A5' : '#6EE7B7',
+                                border: `1px solid ${supportFeedback.type === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`
+                              }}>
+                                {supportFeedback.message}
+                              </div>
+                            )}
+
                             {!showCorrectEmailForm ? (
                               <button
                                 type="button"
@@ -718,6 +734,7 @@ const UsersManagement = () => {
                                   setShowCorrectEmailForm(true);
                                   setCorrectEmailValue(info.memberEmail || '');
                                   setCorrectEmailReason('');
+                                  setSupportFeedback(null);
                                 }}
                               >
                                 Support: Correct Member Email
@@ -732,6 +749,7 @@ const UsersManagement = () => {
                                   value={correctEmailValue}
                                   onChange={e => setCorrectEmailValue(e.target.value)}
                                   placeholder="e.g. member@gmail.com"
+                                  disabled={isCorrectingEmail}
                                 />
                                 <label style={{ display: 'block', fontSize: '11px', color: '#CBD5E1', marginBottom: '4px' }}>Reason for Support Override</label>
                                 <input
@@ -741,6 +759,7 @@ const UsersManagement = () => {
                                   value={correctEmailReason}
                                   onChange={e => setCorrectEmailReason(e.target.value)}
                                   placeholder="e.g. Typo in email address"
+                                  disabled={isCorrectingEmail}
                                 />
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                   <button
@@ -749,18 +768,84 @@ const UsersManagement = () => {
                                     style={{ fontSize: '12px', padding: '5px 12px' }}
                                     disabled={isCorrectingEmail}
                                     onClick={async () => {
-                                      if (!correctEmailValue.trim() || !correctEmailReason.trim()) {
-                                        alert('Please enter both the new email and reason.');
+                                      const normEmail = correctEmailValue.trim().toLowerCase();
+                                      const normReason = correctEmailReason.trim();
+
+                                      if (!normEmail || !/^\S+@\S+\.\S+$/.test(normEmail)) {
+                                        setSupportFeedback({ type: 'error', message: 'Please enter a valid email address.' });
                                         return;
                                       }
+                                      if (!normReason) {
+                                        setSupportFeedback({ type: 'error', message: 'Please provide a non-empty support reason.' });
+                                        return;
+                                      }
+
                                       setIsCorrectingEmail(true);
+                                      setSupportFeedback(null);
+
                                       try {
-                                        await adminUpdateFamilySlotEmail(selectedUser.id, correctEmailValue.trim(), correctEmailReason.trim());
-                                        alert('Family member email successfully updated and audited.');
+                                        // 1. Await callable
+                                        const res = await adminUpdateFamilySlotEmail(selectedUser.id, normEmail, normReason);
+                                        if (!res || !res.success) {
+                                          throw new Error(res?.message || 'Server did not confirm success.');
+                                        }
+
+                                        // 2. Refetch canonical data
+                                        const [refetchedFamilies, refetchedMemberships, refetchedEntitlements, refetchedUsers] = await Promise.all([
+                                          fetchFamilies(),
+                                          fetchFamilyMemberships(),
+                                          fetchEntitlements(),
+                                          fetchUsers(),
+                                        ]);
+
+                                        // 3. Verify canonical state proves the change
+                                        const updatedFam = refetchedFamilies.find(f => f.id === selectedUser.id);
+                                        if (!updatedFam) {
+                                          throw new Error('State verification failed: Owner family record not found.');
+                                        }
+                                        if ((updatedFam.lockedRecipientEmail || '').toLowerCase() !== normEmail) {
+                                          throw new Error(`State verification failed: Locked recipient is "${updatedFam.lockedRecipientEmail}", expected "${normEmail}".`);
+                                        }
+                                        if (!updatedFam.invitation || (updatedFam.invitation.recipientEmail || '').toLowerCase() !== normEmail) {
+                                          throw new Error('State verification failed: Pending invitation for new email was not created.');
+                                        }
+                                        if (updatedFam.memberUid || updatedFam.memberEmail) {
+                                          throw new Error('State verification failed: Old member is still assigned on family record.');
+                                        }
+
+                                        // If old member had a UID, verify revocation
+                                        if (res.oldUid) {
+                                          const oldEnt = refetchedEntitlements.find(e => e.id === res.oldUid);
+                                          if (oldEnt && oldEnt.source === 'family' && oldEnt.status === 'active') {
+                                            throw new Error('State verification failed: Old member entitlement is still active.');
+                                          }
+                                          const oldMem = refetchedMemberships.find(m => m.id === res.oldUid);
+                                          if (oldMem && oldMem.state === 'active') {
+                                            throw new Error('State verification failed: Old member family membership is still active.');
+                                          }
+                                        }
+
+                                        // 4. Update table and modal state
+                                        setFamilies(refetchedFamilies);
+                                        setFamilyMemberships(refetchedMemberships);
+                                        setEntitlements(refetchedEntitlements);
+                                        setUsers(refetchedUsers);
+
+                                        const updatedSelected = refetchedUsers.find(u => u.id === selectedUser.id) || selectedUser;
+                                        setSelectedUser(updatedSelected);
+
+                                        setSupportFeedback({
+                                          type: 'success',
+                                          message: `Family member email successfully updated to ${normEmail}. Old member revoked, slot locked, and new invitation pending.`
+                                        });
                                         setShowCorrectEmailForm(false);
-                                        await loadData();
                                       } catch (err) {
-                                        alert('Failed to update email: ' + (err.message || err));
+                                        console.error('Support correction error:', err);
+                                        setSupportFeedback({
+                                          type: 'error',
+                                          message: err.message || 'Failed to update email: ' + String(err)
+                                        });
+                                        // Retain form values!
                                       } finally {
                                         setIsCorrectingEmail(false);
                                       }
@@ -772,7 +857,10 @@ const UsersManagement = () => {
                                     type="button"
                                     className="btn-secondary"
                                     style={{ fontSize: '12px', padding: '5px 12px' }}
-                                    onClick={() => setShowCorrectEmailForm(false)}
+                                    onClick={() => {
+                                      setShowCorrectEmailForm(false);
+                                      setSupportFeedback(null);
+                                    }}
                                   >
                                     Cancel
                                   </button>

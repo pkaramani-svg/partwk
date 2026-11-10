@@ -12,6 +12,7 @@ import '../auth/login_register_screen.dart';
 import 'paywall_screen.dart';
 import '../../models/user.dart';
 import '../../core/widgets/family_welcome_popup.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -1186,30 +1187,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.info_outline, size: 18, color: theme.colorScheme.primary),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            localizations.translate('family_slot_locked_note'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              height: 1.4,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _buildLockedSlotSupportNote(context, localizations),
                 ],
               ),
             ),
@@ -1305,30 +1283,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.info_outline, size: 18, color: theme.colorScheme.primary),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            localizations.translate('family_slot_locked_note'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              height: 1.4,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _buildLockedSlotSupportNote(context, localizations),
                 ],
               ),
             ),
@@ -1467,6 +1422,75 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLockedSlotSupportNote(BuildContext context, AppLocalizations localizations) {
+    final theme = Theme.of(context);
+    final fullText = localizations.translate('family_slot_locked_note');
+    const email = 'sharing@partwk.com';
+    final parts = fullText.split(email);
+    final prefix = parts.isNotEmpty ? parts[0] : fullText;
+    final suffix = parts.length > 1 ? parts[1] : '';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: theme.colorScheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: theme.textTheme.bodySmall?.copyWith(
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                ),
+                children: [
+                  TextSpan(text: prefix),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: InkWell(
+                        onTap: () async {
+                          final uri = Uri.parse('mailto:sharing@partwk.com');
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri);
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                          child: Text(
+                            email,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              height: 1.4,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary,
+                              decoration: TextDecoration.underline,
+                              decorationColor: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (suffix.isNotEmpty) TextSpan(text: suffix),
+                ],
+              ),
+              textAlign: localizations.isRtl ? TextAlign.right : TextAlign.left,
+              textDirection: localizations.textDirection,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

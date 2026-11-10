@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -191,7 +190,8 @@ void main() {
       expect(find.text('linked@example.com'), findsOneWidget);
       // Remove button is removed in favor of permanent lock support notice
       expect(find.text('Remove Member'), findsNothing);
-      expect(find.text('To change this family member, please contact Partwk Support.'), findsOneWidget);
+      expect(find.textContaining('To change this family member, please contact Partwk Support at'), findsOneWidget);
+      expect(find.text('sharing@partwk.com'), findsOneWidget);
       // Ensure email text field is completely absent
       expect(find.byType(TextField), findsNothing);
       expect(find.text('Invite Family Member'), findsNothing);
@@ -221,7 +221,8 @@ void main() {
       expect(find.text('pending@example.com'), findsOneWidget);
       // Cancel button is removed in favor of permanent lock support notice
       expect(find.text('Cancel Invitation'), findsNothing);
-      expect(find.text('To change this family member, please contact Partwk Support.'), findsOneWidget);
+      expect(find.textContaining('To change this family member, please contact Partwk Support at'), findsOneWidget);
+      expect(find.text('sharing@partwk.com'), findsOneWidget);
       // Ensure email text field is completely absent
       expect(find.byType(TextField), findsNothing);
     });
@@ -342,14 +343,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('١ لە ١ چالاکە'), findsOneWidget);
       expect(find.text('سڕینەوەی ئەندام'), findsNothing);
-      expect(find.text('بۆ گۆڕینی ئەم ئەندامەی خێزان، تکایە پەیوەندی بە بەشی پشتیوانیی پەرتوکەوە بکە.'), findsOneWidget);
+      expect(find.textContaining('بۆ گۆڕینی ئەم ئەندامەی خێزانە، تکایە پەیوەندی بە پشتگیری پەرتوک بکە لە:'), findsOneWidget);
+      expect(find.text('sharing@partwk.com'), findsOneWidget);
 
       // Arabic
       await tester.pumpWidget(buildTestScreen(const Locale('ar')));
       await tester.pumpAndSettle();
       expect(find.text('نشط 1 من 1'), findsOneWidget);
       expect(find.text('إزالة العضو'), findsNothing);
-      expect(find.text('لتغيير هذا العضو من العائلة، يرجى التواصل مع دعم بارتوك.'), findsOneWidget);
+      expect(find.textContaining('لتغيير فرد العائلة هذا، يرجى التواصل مع دعم Partwk عبر:'), findsOneWidget);
+      expect(find.text('sharing@partwk.com'), findsOneWidget);
     });
 
     testWidgets('App lifecycle resumed event triggers status refresh', (tester) async {

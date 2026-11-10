@@ -1188,7 +1188,7 @@ exports.adminOverrideFamilyRemoval = onCall(async request => {
   return endFamily(ownerUid, actorUid, 'family_admin_override_removal', true, { reason });
 });
 
-exports.adminUpdateFamilySlotEmail = onCall(async (request) => {
+exports.adminUpdateFamilySlotEmail = onCall({ secrets: [smtpPass] }, async (request) => {
   const actorUid = requireUser(request);
   if (!isAdminToken(request)) {
     throw new HttpsError('permission-denied', 'Administrator required.');
@@ -1196,11 +1196,79 @@ exports.adminUpdateFamilySlotEmail = onCall(async (request) => {
   const ownerUid = String(request.data?.ownerUid || '').trim();
   const newEmail = String(request.data?.newEmail || '').trim().toLowerCase();
   const reason = String(request.data?.reason || '').trim();
-  if (!ownerUid || !/^\S+@\S+\.\S+$/.test(newEmail) || !reason) {
-    throw new HttpsError('invalid-argument', 'Valid ownerUid, newEmail, and reason are required.');
+
+  if (!ownerUid) {
+    throw new HttpsError('invalid-argument', 'Valid ownerUid is required.');
+  }
+  if (!/^\S+@\S+\.\S+$/.test(newEmail)) {
+    throw new HttpsError('invalid-argument', 'Valid newEmail is required.');
+  }
+  if (!reason) {
+    throw new HttpsError('invalid-argument', 'A non-empty support reason is required.');
   }
 
+  // 1. Validate Family Owner exists and has active primary Premium entitlement
+  const ownerEntPre = (await effectiveEntitlement(ownerUid)).data;
+  if (!activeEntitlement(ownerEntPre) || ownerEntPre.source === 'family') {
+    throw new HttpsError('failed-precondition', 'The Family Owner must have an active primary Premium entitlement.');
+  }
+
+  // Find owner user record to prevent self-invites
+  let ownerRecord = null;
+  let ownerName = '';
+  let ownerLang = '';
+  try {
+    ownerRecord = await admin.auth().getUser(ownerUid);
+    ownerName = ownerRecord.displayName || '';
+    const ownerDoc = await db.doc(`users/${ownerUid}`).get();
+    if (ownerDoc.exists) {
+      if (!ownerName && ownerDoc.data().name) ownerName = ownerDoc.data().name;
+      if (ownerDoc.data().selectedLanguage) ownerLang = ownerDoc.data().selectedLanguage;
+    }
+  } catch (_) {}
+
+  if (ownerRecord?.email && ownerRecord.email.toLowerCase().trim() === newEmail) {
+    throw new HttpsError('invalid-argument', 'Cannot assign family slot to the owner themselves.');
+  }
+
+  // 2. Validate recipient pre-conditions
+  let recipient = null;
+  let recipientLang = '';
+  try {
+    recipient = await admin.auth().getUserByEmail(newEmail);
+    if (recipient) {
+      const recDoc = await db.doc(`users/${recipient.uid}`).get();
+      if (recDoc.exists && recDoc.data().selectedLanguage) {
+        recipientLang = recDoc.data().selectedLanguage;
+      }
+    }
+  } catch (_) {
+    recipient = null;
+  }
+
+  if (recipient) {
+    if (recipient.uid === ownerUid) {
+      throw new HttpsError('invalid-argument', 'Cannot assign family slot to the owner themselves.');
+    }
+    const recEnt = (await effectiveEntitlement(recipient.uid)).data;
+    if (activeEntitlement(recEnt) && recEnt.source !== 'family') {
+      throw new HttpsError('failed-precondition', 'That account has its own paid access and cannot join a family.');
+    }
+    const recMem = await db.doc(`familyMemberships/${recipient.uid}`).get();
+    if (recMem.exists && ['pending', 'active'].includes(recMem.data().state)) {
+      throw new HttpsError('failed-precondition', 'That account is already in a family relationship.');
+    }
+    const recFam = await db.doc(`families/${recipient.uid}`).get();
+    if (recFam.exists && (recFam.data().memberUid || recFam.data().invitation)) {
+      throw new HttpsError('failed-precondition', 'That account already owns another family.');
+    }
+  }
+
+  // 3. Execute atomic transaction
   let oldEmail = null;
+  let oldUid = null;
+  let backupOldState = null;
+
   await db.runTransaction(async (transaction) => {
     const familyRef = db.doc(`families/${ownerUid}`);
     const famSnap = await transaction.get(familyRef);
@@ -1208,30 +1276,183 @@ exports.adminUpdateFamilySlotEmail = onCall(async (request) => {
       throw new HttpsError('not-found', 'Family record not found for this owner.');
     }
     const fam = famSnap.data();
-    oldEmail = fam.lockedRecipientEmail || fam.memberEmail || fam.invitation?.recipientEmail || null;
 
-    const updateData = {
-      lockedRecipientEmail: newEmail,
-      slotLockedAt: ts(),
-      updatedAt: ts(),
-    };
-    if (fam.invitation) {
-      updateData['invitation.recipientEmail'] = newEmail;
-      updateData['invitation.recipientUid'] = null;
+    // Verify owner still active primary in transaction
+    const ownerEntTx = await effectiveEntitlement(ownerUid, transaction);
+    if (!activeEntitlement(ownerEntTx.data) || ownerEntTx.data.source === 'family') {
+      throw new HttpsError('failed-precondition', 'The Family Owner must have an active primary Premium entitlement.');
     }
-    transaction.update(familyRef, updateData);
+
+    oldEmail = (fam.lockedRecipientEmail || fam.memberEmail || fam.invitation?.recipientEmail || '').toLowerCase().trim();
+    if (oldEmail && oldEmail === newEmail) {
+      throw new HttpsError('invalid-argument', 'New email must differ from current locked email.');
+    }
+
+    oldUid = fam.memberUid || fam.invitation?.recipientUid || null;
+    if (!oldUid && oldEmail) {
+      try {
+        const oldUserRec = await admin.auth().getUserByEmail(oldEmail);
+        oldUid = oldUserRec.uid;
+      } catch (_) {}
+    }
+
+    backupOldState = {
+      family: { ...fam },
+      oldUid,
+      oldEmail,
+      oldMemberEnt: null,
+      oldMemberMem: null,
+      oldUserLegacy: null,
+    };
+
+    if (oldUid) {
+      const [oldEntSnap, oldMemSnap, oldUserSnap] = await Promise.all([
+        transaction.get(db.doc(`entitlements/${oldUid}`)),
+        transaction.get(db.doc(`familyMemberships/${oldUid}`)),
+        transaction.get(db.doc(`users/${oldUid}`)),
+      ]);
+      if (oldEntSnap.exists) backupOldState.oldMemberEnt = oldEntSnap.data();
+      if (oldMemSnap.exists) backupOldState.oldMemberMem = oldMemSnap.data();
+      if (oldUserSnap.exists) backupOldState.oldUserLegacy = oldUserSnap.data();
+
+      // Revoke old member entitlement immediately
+      transaction.set(db.doc(`entitlements/${oldUid}`), {
+        status: 'inactive',
+        source: 'none',
+        ownerUid: null,
+        expiresAt: null,
+        updatedAt: ts(),
+      }, { merge: true });
+
+      // Update old member family membership
+      transaction.set(db.doc(`familyMemberships/${oldUid}`), {
+        ownerUid,
+        memberUid: oldUid,
+        state: 'removed',
+        expiresAt: null,
+        updatedAt: ts(),
+      }, { merge: true });
+
+      // Update legacy user doc
+      transaction.set(db.doc(`users/${oldUid}`), {
+        hasFamilyPremium: false,
+        updatedAt: ts(),
+      }, { merge: true });
+    }
+
+    // Update family record: clear active member, set pending invitation and keep lockedRecipientEmail
+    transaction.set(familyRef, {
+      ownerUid,
+      lockedRecipientEmail: newEmail,
+      slotLockedAt: fam.slotLockedAt || ts(),
+      invitation: {
+        recipientUid: recipient ? recipient.uid : null,
+        recipientEmail: newEmail,
+        createdAt: ts(),
+        correctedByAdminUid: actorUid,
+        supportReason: reason,
+      },
+      memberUid: FieldValue.delete(),
+      memberEmail: FieldValue.delete(),
+      updatedAt: ts(),
+    }, { merge: true });
+
+    // Update legacy owner doc
+    transaction.set(db.doc(`users/${ownerUid}`), {
+      familyMembers: [],
+      updatedAt: ts(),
+    }, { merge: true });
+
+    // If new recipient has registered account, create pending membership
+    if (recipient) {
+      transaction.set(db.doc(`familyMemberships/${recipient.uid}`), {
+        ownerUid,
+        memberUid: recipient.uid,
+        state: 'pending',
+        updatedAt: ts(),
+      }, { merge: true });
+    }
   });
 
+  // 4. Send invitation email with rollback on failure
+  let targetLang = 'en';
+  if (['en', 'ku', 'ar'].includes(recipientLang)) {
+    targetLang = recipientLang;
+  } else if (['en', 'ku', 'ar'].includes(ownerLang)) {
+    targetLang = ownerLang;
+  }
+
+  let subject = '';
+  if (targetLang === 'ku') {
+    subject = `${ownerName || 'بەکارهێنەرێکی پەرتوک'} بانگهێشتی کردوویت بۆ بەشداریکردنی خێزانی لە پەرتوک`;
+  } else if (targetLang === 'ar') {
+    subject = `${ownerName || 'مستخدم في بارتوك'} دعاك للانضمام إلى بارتوك العائلي`;
+  } else {
+    subject = `${ownerName || 'A Partwk member'} invited you to Partwk Family Sharing`;
+  }
+
+  const htmlContent = getFamilyInvitationEmailHTML(ownerName, newEmail, targetLang);
+
+  try {
+    await sendEmail(newEmail, subject, htmlContent);
+  } catch (smtpErr) {
+    console.error('SMTP error during adminUpdateFamilySlotEmail. Rolling back:', smtpErr);
+    await db.runTransaction(async (rbTx) => {
+      const famRef = db.doc(`families/${ownerUid}`);
+      if (backupOldState?.family) {
+        rbTx.set(famRef, backupOldState.family);
+      }
+      if (backupOldState?.oldUid) {
+        if (backupOldState.oldMemberEnt) {
+          rbTx.set(db.doc(`entitlements/${backupOldState.oldUid}`), backupOldState.oldMemberEnt);
+        }
+        if (backupOldState.oldMemberMem) {
+          rbTx.set(db.doc(`familyMemberships/${backupOldState.oldUid}`), backupOldState.oldMemberMem);
+        }
+        if (backupOldState.oldUserLegacy) {
+          rbTx.set(db.doc(`users/${backupOldState.oldUid}`), { hasFamilyPremium: backupOldState.oldUserLegacy.hasFamilyPremium ?? false }, { merge: true });
+        }
+      }
+      if (recipient) {
+        rbTx.delete(db.doc(`familyMemberships/${recipient.uid}`));
+      }
+    }).catch((rbFail) => {
+      console.error('Rollback failed:', rbFail);
+    });
+
+    await writeAudit(actorUid, 'admin_update_family_slot_email_failed', {
+      ownerUid,
+      oldEmail,
+      newEmail,
+      adminUid: actorUid,
+      reason,
+      outcome: 'failed',
+      error: smtpErr.message || String(smtpErr),
+      timestamp: ts(),
+    });
+
+    throw new HttpsError('internal', 'Unable to send invitation email. Rollback executed: ' + (smtpErr.message || smtpErr));
+  }
+
+  // 5. Success audit log
   await writeAudit(actorUid, 'admin_update_family_slot_email', {
     ownerUid,
     oldEmail,
     newEmail,
-    actingAdminUid: actorUid,
+    adminUid: actorUid,
     reason,
+    outcome: 'success',
     timestamp: ts(),
   });
 
-  return { success: true, oldEmail, newEmail, ownerUid };
+  return {
+    success: true,
+    ownerUid,
+    oldEmail,
+    oldUid,
+    newEmail,
+    outcome: 'success',
+  };
 });
 
 // Store verification is fail-closed until App Store Server API / Google Play
