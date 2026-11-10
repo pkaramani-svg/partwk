@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Partwk</title>
+  <meta name="description" content="Partwk Privacy Policy explaining how ZENTORI STUDIOS LTD handles user data, authentication, encrypted downloads, and account deletion.">
+  <link rel="icon" type="image/png" href="/assets/app_icon.png">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="brand-link">
+        <img src="/assets/app_icon.png" alt="Partwk Logo" class="brand-logo">
+        <span class="brand-title">Partwk <span class="kurdish-mark">پەرتوک</span></span>
+      </a>
+      <nav class="main-nav" aria-label="Main Navigation">
+        <a href="/">Home</a>
+        <a href="/privacy" class="active">Privacy Policy</a>
+        <a href="/terms">Terms</a>
+        <a href="/delete-account">Delete Account</a>
+        <a href="/support">Support</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="site-content">
+    <article class="doc-header">
+      <h1>Privacy Policy</h1>
+      <p class="doc-meta">Effective Date: November 10, 2026 • Published by ZENTORI STUDIOS LTD</p>
+    </article>
+
+    <div class="doc-body">
+      <p>Partwk ("we", "us", or "our"), operated by <strong>ZENTORI STUDIOS LTD</strong>, provides a multilingual book-summary reading and audio-listening mobile application available in English, Kurdish Sorani (کوردی سۆرانی), and Arabic (العربية). This Privacy Policy explains our practices regarding the collection, use, and disclosure of information when you use Partwk.</p>
+
+      <h2>1. Information We Collect</h2>
+      <p>We collect only the information necessary to provide, synchronize, and protect your reading and audio-listening experience:</p>
+      <ul>
+        <li><strong>Account Information:</strong> When you register an account, we collect your display name and email address. Account authentication and password management are handled securely through Google Firebase Authentication.</li>
+        <li><strong>Subscription & Entitlements:</strong> We record your subscription status (Free, Premium, or Family Sharing linked member) and associated membership state to grant appropriate access to premium content.</li>
+        <li><strong>Reading & Listening Progress:</strong> To enable seamless multi-device synchronization, we store your book completion progress, playback position timestamps, daily study streaks, and saved library items in Google Cloud Firestore.</li>
+        <li><strong>Encrypted Local Storage:</strong> When you choose to download books or audio editions for offline access, the media files and decryption keys are securely encrypted and stored locally in your device's private sandbox storage. Local downloads are validated through our device licence manager.</li>
+        <li><strong>Diagnostic & Device Information:</strong> We may collect non-identifying technical logs, OS version, and app performance metrics to detect crashes and resolve software bugs.</li>
+      </ul>
+
+      <h2>2. How We Use Your Information</h2>
+      <p>Your information is used strictly to deliver and maintain the Partwk service:</p>
+      <ul>
+        <li>To provide reading summaries, audio playback, and personalized library features.</li>
+        <li>To synchronize your reading and audio positions seamlessly across sessions.</li>
+        <li>To manage Family Sharing memberships and enforce locked recipient safeguards.</li>
+        <li>To enforce single active session security rules, preventing unauthorized concurrent account access.</li>
+        <li>To send you optional study reminders or notification alerts (only if you have explicitly granted notification permissions on your device).</li>
+      </ul>
+
+      <h2>3. Data Protection & No Selling of Data</h2>
+      <p>We respect your privacy. <strong>We do not sell, rent, monetize, or trade your personal data to any third parties.</strong> We do not deploy third-party behavioral advertising tracking SDKs inside Partwk.</p>
+
+      <h2>4. Family Sharing Safeguards</h2>
+      <p>For users on Family Sharing plans, a Primary subscriber can link one family member slot. We store the designated recipient's email to protect the slot from accidental reassignment. For questions or slot corrections, users can contact <a href="mailto:sharing@partwk.com">sharing@partwk.com</a>.</p>
+
+      <h2>5. Data Retention & Account Deletion</h2>
+      <p>We retain your personal data only for as long as your account remains active. You maintain full ownership and control over your account:</p>
+      <ul>
+        <li><strong>In-App Deletion:</strong> You can delete your account at any time directly inside the Partwk mobile application by navigating to <code>Profile → Settings → Delete account</code>. This initiates an immediate deletion of your authentication credentials, cloud profile, reading history, and family associations.</li>
+        <li><strong>Support Deletion Request:</strong> If you are unable to access the mobile application, you can submit an account deletion request by emailing <a href="mailto:support@partwk.com">support@partwk.com</a> from your registered email address. We will verify your identity and process the deletion within 30 days.</li>
+      </ul>
+
+      <h2>6. Security Measures</h2>
+      <p>We implement industry-standard administrative, technical, and cryptographic security measures to safeguard user data, including encrypted network communications (HTTPS/TLS) and secure token-based authentication.</p>
+
+      <h2>7. Contact Information</h2>
+      <p>If you have any questions, concerns, or requests regarding this Privacy Policy or your data, please contact our team:</p>
+      <div class="info-box">
+        <p><strong>ZENTORI STUDIOS LTD</strong><br>
+        General Inquiries & Privacy: <a href="mailto:support@partwk.com">support@partwk.com</a><br>
+        Family Sharing Support: <a href="mailto:sharing@partwk.com">sharing@partwk.com</a><br>
+        Website: <a href="https://partwk.com">https://partwk.com</a></p>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-nav">
+        <a href="/">Home</a>
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
+        <a href="/delete-account">Account Deletion</a>
+        <a href="/support">Support</a>
+      </div>
+      <div class="footer-copyright">
+        <span>&copy; <span id="year">2026</span> ZENTORI STUDIOS LTD. All rights reserved.</span>
+        <span>Partwk • پەرتوک</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
