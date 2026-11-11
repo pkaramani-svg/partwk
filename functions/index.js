@@ -5,6 +5,7 @@ const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const { Timestamp, FieldValue } = require('firebase-admin/firestore');
 const nodemailer = require('nodemailer');
+const path = require('path');
 
 admin.initializeApp();
 
@@ -13,6 +14,8 @@ admin.initializeApp();
 // Reads credentials securely from Secret Manager or environment variables
 // ============================================================================
 const smtpPass = defineSecret('SMTP_PASS');
+const EMAIL_LOGO_CID = 'partwk-canonical-logo';
+const EMAIL_LOGO_PATH = path.join(__dirname, 'assets', 'partwk_canonical_logo.png');
 
 function getSmtpPassword() {
   try {
@@ -55,6 +58,12 @@ async function sendEmail(to, subject, html) {
       to: to,
       subject: subject,
       html: html,
+      attachments: [{
+        filename: 'partwk-logo.png',
+        path: EMAIL_LOGO_PATH,
+        cid: EMAIL_LOGO_CID,
+        contentType: 'image/png',
+      }],
     });
     console.log("Message sent: %s", info.messageId);
     return info;
@@ -68,9 +77,8 @@ async function sendEmail(to, subject, html) {
 // EMAIL TEMPLATES
 // ============================================================================
 
-// This image-only URL is deliberately on the isolated public-site Hosting target,
-// not partwk.com (which is Cloudflare Access protected) or the Admin Hosting site.
-const logoImg = `<div style="text-align: center; margin-bottom: 20px;"><img src="https://partwk-web.web.app/assets/email_logo.png?v=canonical-2026" alt="Partwk - Read, Learn, Grow" style="height: 75px; width: auto; max-width: 100%; border: 0; outline: none; display: inline-block;" /></div>`;
+// CID embedding keeps transactional email independent from website, Hosting, and Access state.
+const logoImg = `<div style="text-align: center; margin-bottom: 20px;"><img src="cid:partwk-canonical-logo" alt="Partwk" style="height: 75px; width: auto; max-width: 100%; border: 0; outline: none; display: inline-block;" /></div>`;
 
 const getWelcomeFreeEmailHTML = (name) => `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; background-color: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
