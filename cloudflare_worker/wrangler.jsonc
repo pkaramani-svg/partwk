@@ -1,0 +1,14 @@
+{
+  "name": "partwk-public-site",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-11",
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "partwk.com/*", "zone_name": "partwk.com" },
+    { "pattern": "www.partwk.com/*", "zone_name": "partwk.com" }
+  ],
+  "assets": {
+    "directory": "../public_website",
+    "binding": "ASSETS"
+  }
+}

@@ -43,7 +43,7 @@
     },
     {
       "site": "partwk-web",
-      "public": "public_website",
+      "public": "public_prelaunch_holding",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -51,6 +51,12 @@
       ],
       "cleanUrls": true,
       "trailingSlash": false,
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
       "headers": [
         {
           "source": "**/*.@(css|js|png|jpg|jpeg|gif|svg|ico)",
