@@ -68,7 +68,9 @@ async function sendEmail(to, subject, html) {
 // EMAIL TEMPLATES
 // ============================================================================
 
-const logoImg = `<div style="text-align: center; margin-bottom: 20px;"><img src="https://partwk-bd4ec.web.app/email_logo.png?v=emblem-2026" alt="Partwk - Read, Learn, Grow" style="height: 75px; width: auto; max-width: 100%; border: 0; outline: none; display: inline-block;" /></div>`;
+// This image-only URL is deliberately on the isolated public-site Hosting target,
+// not partwk.com (which is Cloudflare Access protected) or the Admin Hosting site.
+const logoImg = `<div style="text-align: center; margin-bottom: 20px;"><img src="https://partwk-web.web.app/assets/email_logo.png?v=canonical-2026" alt="Partwk - Read, Learn, Grow" style="height: 75px; width: auto; max-width: 100%; border: 0; outline: none; display: inline-block;" /></div>`;
 
 const getWelcomeFreeEmailHTML = (name) => `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; background-color: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
